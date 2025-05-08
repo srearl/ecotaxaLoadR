@@ -5,10 +5,14 @@
 #'   analyses.
 #'
 #' @param file_path (character) Quoted path to and name of the EcoTaxa TSV file.
+#' @param daynight (boolean) Boolean indicating whether to annotate the data
+#'   with a day-night designation based on ship position and time of collection.
+#' @param debug (boolean) Boolean indicating whether to debug parsing the
+#'   cruise_id field.
 #'
 #' @return A data frame with the processed EcoTaxa data, including additional
-#'   columns derived from the cruise_id. Additional columns and standardizations
-#'   are performed for MOC data.
+#'   columns derived from the cruise_id (if parsable). Additional columns and
+#'   standardizations are performed for MOC data.
 #'
 #' @importFrom tools file_ext
 #' @importFrom readr read_delim
@@ -18,27 +22,29 @@
 #' @importFrom pointblank create_agent col_vals_not_null col_vals_lte
 #'   col_vals_equal interrogate
 #'
-#' @export
-#'
 #' @examples \dontrun{
 #' eco_taxa_df <- load_eco_taxa("path/to/eco_taxa_file.tsv")
 #'   print(eco_taxa_df)
 #' }
 #'
+#' @export
+#'
 load_eco_taxa <- function(
   file_path,
+  daynight = FALSE,
   debug = FALSE
 ) {
+
   if (tools::file_ext(file_path) != "tsv") {
     stop("The provided file must be of type 'tsv'.")
   }
 
   eco_taxa <- base::tryCatch(
     {
-      read.delim(
-        file             = file_path,
-        sep              = "\t",
-        header           = TRUE,
+      utils::read.delim(
+        file = file_path,
+        sep = "\t",
+        header = TRUE,
         stringsAsFactors = FALSE
       )
     },
@@ -51,14 +57,26 @@ load_eco_taxa <- function(
     }
   )
 
+  eco_taxa <- eco_taxa |>
+    janitor::clean_names()
+
+  if (!"object_id" %in% names(eco_taxa)) {
+    stop("The input data must contain the column 'object_id'.")
+  }
+
   parsed <- parse_cruise_id(
     ecotaxa_file = eco_taxa,
-    debug        = debug
+    debug = debug
   )
 
-  eco_taxa <- parsed[["parsed_file"]]
-  pattern  <- parsed[["pattern"]]
+  pattern <- NULL
 
+  if (!is.null(parsed)) {
+    eco_taxa <- parsed[["parsed_file"]]
+    pattern <- parsed[["pattern"]]
+  }
+
+  # further process MOC data
   if (pattern == "moc") {
     ensure_numeric <- c(
       "object_area",
@@ -69,13 +87,6 @@ load_eco_taxa <- function(
       "object_depth_min",
       "acq_sub_part"
     )
-
-    eco_taxa <- eco_taxa |>
-      janitor::clean_names()
-
-    if (!"object_id" %in% names(eco_taxa)) {
-      stop("The input data frame must contain an 'object_id' column.")
-    }
 
     eco_taxa <- eco_taxa |>
       # this is now addressed by extract_columns()
@@ -96,7 +107,7 @@ load_eco_taxa <- function(
         # net = as.factor(net),
         dplyr::across(
           .cols = dplyr::any_of(ensure_numeric),
-          .fns  = as.numeric
+          .fns = as.numeric
         ),
         # do not convert cruise_moc_net to factor!
         cruise_moc_net = paste(
@@ -202,7 +213,7 @@ load_eco_taxa <- function(
         ) |>
         dplyr::filter(unique_dates != 1)
 
-      # this is a stop because a fail will bork annotate_daytime_parallel()
+      # this is a stop because a fail will bork annotate_daytime()
       stop(
         "encountered a cruise-moc pair with more than one date: ",
         paste(
@@ -235,9 +246,12 @@ load_eco_taxa <- function(
       )
     }
 
-    eco_taxa <- annotate_daytime(eco_taxa)
+  }
 
+  if (daynight == TRUE) {
+    eco_taxa <- annotate_daytime(eco_taxa)
   }
 
   return(eco_taxa)
+
 }

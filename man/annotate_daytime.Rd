@@ -8,33 +8,22 @@ collection date and time.}
 annotate_daytime(eco_taxa_df, workers = future::availableCores() - 1)
 }
 \arguments{
-\item{eco_taxa_df}{(character) Unquoted name of data downloaded from EcoTaxa
-to the R environment at least minimally processed to have separate columns
-for the cruise and MOC ids as \code{cruise} and \code{moc}, respectively.}
+\item{eco_taxa_df}{(character) Unquoted name of EcoTaxa resource in the R
+environment.}
 
 \item{workers}{(integer) The number of parallel workers to use. Defaults to
 one less than the available cores.}
 }
 \value{
-A data frame with an additional column \code{is_day} indicating whether
-the observation occurred during daytime.
+The input data as a data frame with an additional column \code{is_day}
+indicating whether the observation occurred during daytime (TRUE).
 }
 \description{
-\code{annotate_daytime} annotates whether a given
-observation in an EcoTaxa record was collected during the day or night
-based on ship position, and collection date and time. The function assumes
-that the collection time is provided in UTC. Minimal processing of the
-EcoTaxa file such that cruise and MOC ids are included as separate columns
-in the data frame as \code{cruise} and \code{moc}, respectively, is required.
-}
-\note{
-The function was parallelized as the initial implementation computed
-\code{is_day} for each record of the data frame. Since all MOCs do (or should)
-have the same collection details, the function was refactored to group the
-records by cruise and MOC, and computes \code{is_day} for each group, which are
-then joined to the full data set. This reduces the number of calls to
-\code{is_daytime} and speeds up the computation, but it is still computationally
-expensive and, thus, the parallelization was retained.
+\code{annotate_daytime} annotates whether a given observation in
+an EcoTaxa record was collected during the day or night based on ship
+position, and collection date and time. The function assumes that the
+collection time is provided in UTC. Columns for date, time, latitude, and
+longitude must be included.
 }
 \examples{
 \dontrun{

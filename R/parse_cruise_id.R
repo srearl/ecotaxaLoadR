@@ -20,9 +20,10 @@ parse_cruise_id <- function(
   debug = FALSE
 ) {
 
-  # random sample of 1000 records
+  # test for data collection type from a subsample of the data
   set.seed(123)
-  subsample <- ecotaxa_file[sample(nrow(ecotaxa_file), 1000), ]
+  sample_size <- min(1000,             nrow(ecotaxa_file))
+  subsample   <- ecotaxa_file[sample(x = nrow(ecotaxa_file), size = sample_size), , drop = FALSE]
 
   flowcam_pattern_true <- FALSE
   moc_pattern_true     <- FALSE
@@ -55,23 +56,22 @@ parse_cruise_id <- function(
     message("flowcam pattern matched")
 
     flowcam_patterns <- list(
-      flowcam_pattern  = flowcam_pattern,
+      flowcam_pattern = flowcam_pattern,
       flowcam_pattern2 = flowcam_pattern2
     )
 
     extracted_file <- extract_flowcam_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern      = flowcam_patterns,
-      debug        = debug
+      pattern = flowcam_patterns,
+      debug = debug
     )
 
     return(
       list(
         parsed_file = extracted_file,
-        pattern     = "flowcam"
+        pattern = "flowcam"
       )
     )
-
   }
 
   # MOC
@@ -132,17 +132,16 @@ parse_cruise_id <- function(
 
     extracted_file <- extract_moc_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern      = moc_patterns,
-      debug        = debug
+      pattern = moc_patterns,
+      debug = debug
     )
 
     return(
       list(
         parsed_file = extracted_file,
-        pattern     = "moc"
+        pattern = "moc"
       )
     )
-
   }
 
   # UVP
@@ -168,18 +167,17 @@ parse_cruise_id <- function(
 
     extracted_file <- extract_uvp_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern      = uvp_patterns,
-      debug        = debug
+      pattern = uvp_patterns,
+      debug = debug
     )
 
     return(
       list(
         parsed_file = extracted_file,
-        pattern     = "uvp"
+        pattern = "uvp"
       )
     )
-
-  } 
+  }
 
   if (
     !flowcam_pattern_true &&
@@ -189,7 +187,6 @@ parse_cruise_id <- function(
     message("could match the object_id to any patterns")
     return(NULL)
   }
-
 }
 
 #' @title Parse the cruise ID column of an EcoTaxa file of type MOC

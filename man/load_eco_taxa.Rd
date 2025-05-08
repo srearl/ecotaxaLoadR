@@ -4,25 +4,31 @@
 \alias{load_eco_taxa}
 \title{Load and minimally process downloaded EcoTaxa data}
 \usage{
-load_eco_taxa(file_path, debug = FALSE)
+load_eco_taxa(file_path, daynight = FALSE, debug = FALSE)
 }
 \arguments{
-\item{file_path}{(character) Quoted path to the EcoTaxa TSV file.}
+\item{file_path}{(character) Quoted path to and name of the EcoTaxa TSV file.}
+
+\item{daynight}{(boolean) Boolean indicating whether to annotate the data
+with a day-night designation based on ship position and time of collection.}
+
+\item{debug}{(boolean) Boolean indicating whether to debug parsing the
+cruise_id field.}
 }
 \value{
 A data frame with the processed EcoTaxa data, including additional
-columns for cruise, moc, net, fraction, and select object dimensions
-converted from pixels to millimeters.
+columns derived from the cruise_id (if parsable). Additional columns and
+standardizations are performed for MOC data.
 }
 \description{
 This function loads and processes EcoTaxa data from a TSV file.
-It ensures that the data is properly formatted and annotated for further
-analysis.
+It ensures that the data are properly formatted and annotated for further
+analyses.
 }
 \examples{
 \dontrun{
 eco_taxa_df <- load_eco_taxa("path/to/eco_taxa_file.tsv")
-print(eco_taxa_df)
+  print(eco_taxa_df)
 }
 
 }
