@@ -42,9 +42,9 @@ load_eco_taxa <- function(
   eco_taxa <- base::tryCatch(
     {
       utils::read.delim(
-        file = file_path,
-        sep = "\t",
-        header = TRUE,
+        file             = file_path,
+        sep              = "\t",
+        header           = TRUE,
         stringsAsFactors = FALSE
       )
     },
@@ -66,18 +66,19 @@ load_eco_taxa <- function(
 
   parsed <- parse_cruise_id(
     ecotaxa_file = eco_taxa,
-    debug = debug
+    debug        = debug
   )
 
   pattern <- NULL
 
   if (!is.null(parsed)) {
     eco_taxa <- parsed[["parsed_file"]]
-    pattern <- parsed[["pattern"]]
+    pattern  <- parsed[["pattern"]]
   }
 
   # further process MOC data
   if (pattern == "moc") {
+
     ensure_numeric <- c(
       "object_area",
       "object_major",
@@ -85,7 +86,8 @@ load_eco_taxa <- function(
       "object_esd",
       "object_depth_max",
       "object_depth_min",
-      "acq_sub_part"
+      "acq_sub_part",
+      "sample_tot_vol"
     )
 
     eco_taxa <- eco_taxa |>
@@ -107,7 +109,7 @@ load_eco_taxa <- function(
         # net = as.factor(net),
         dplyr::across(
           .cols = dplyr::any_of(ensure_numeric),
-          .fns = as.numeric
+          .fns  = as.numeric
         ),
         # do not convert cruise_moc_net to factor!
         cruise_moc_net = paste(
@@ -149,8 +151,10 @@ load_eco_taxa <- function(
           pi *
           ((object_minor_mm * 0.5)^2) *
           (object_major_mm / 2),
-        hdif = object_depth_max - object_depth_min,
-        split = (1 / acq_sub_part)
+        hdif      = object_depth_max - object_depth_min,
+        split     = (1 / acq_sub_part),
+        density   = (acq_sub_part / sample_tot_vol),
+        abundance = (acq_sub_part / sample_tot_vol) * (object_depth_max - object_depth_min)
       )
 
     # data validations:
