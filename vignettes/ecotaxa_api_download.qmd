@@ -1,0 +1,179 @@
+---
+title: "download via the EcoTaxa API"
+vignette: >
+  %\VignetteIndexEntry{download via the EcoTaxa API}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+knitr:
+  opts_chunk:
+    collapse: true
+    comment: '#>'
+execute: 
+  eval: false
+---
+
+```{r}
+#| label: setup
+library(ecotaxaLoadR)
+```
+
+## authentication
+
+Generate a token to access the EcoTaxa API. This is saved to disk at a prescribed location and accessed when calls to the API are made. I am not sure how long the token is valid but it is ephemeral so will need to be recreated periodically.
+
+```{r}
+#| label: authentication
+
+token <- ecotaxarapi::login(
+  LoginReq = ecotaxarapi::LoginReq(
+    username = "ecotaxa_user",
+    password = "ecotaxa_password"
+  )
+)
+
+options(ecotaxa.token_path = "~/.my_ecotaxa_token")
+ecotaxarapi::api_token_path() # confirm path
+ecotaxarapi::save_api_token(token)
+
+```
+
+## projects
+
+You can search for projects to which you have access. The `search_projects` function returns a data frame with the project ID and title, among other information. Note that if `search_projects` returns a long list of projects, your token may have expired and you may be accessing projects that are publicly accessible but not specific to you. In that case, generate a new token and rerun the query.
+
+```{r}
+#| label: projects
+
+my_projects <- ecotaxarapi::search_projects()
+my_projects[, c("projid", "title")]
+
+```
+
+Example set of projects to which the user has access:
+
+| projid | title                                   |
+|--------|-----------------------------------------|
+|  5421  | Gradients_v2                            |
+|  5446  | Aggregates                              |
+| 10421  | USC_BATS2019-2022                       |
+| 13454  | BATS_UVP6                               |
+| 14986  | RhizaBATS_NiskinFlowCam                 |
+| 15985  | PVST_BATS_PLANKTON_FlowCamNiskinTrigger |
+
+
+## jobs
+
+You can create jobs to export data from EcoTaxa. A job is a request to export data based on certain filters and parameters. You can check for existing jobs, create a new job, and download the results.
+
+### check for existing jobs
+
+```{r}
+#| label: jobs-existing
+
+# `for_admin`	(boolean): FALSE returns the jobs for current user else all of them
+
+jobs <- ecotaxarapi::list_jobs(for_admin = FALSE)
+
+tibble::tibble(
+  id = jobs$id,
+  project_id = purrr::map_int(
+    .x = base::seq_len(base::nrow(jobs)),
+    .f = ~ jobs$params$req$project_id[.x])
+)
+
+```
+
+Example set of jobs the user has created:
+
+| id      | project_id |
+|---------|------------|
+| 149243  | 10421      |
+| 149268  | 13454      |
+
+
+### create a job
+
+Use the API to create a new job. You need to specify the project ID, filters, and export parameters. The `Body_export_object_set_general_object_set_export_general_post` function generates the request body for the export. In the example below, we are not applying any project filters but all filters that you might apply in the EcoTaxa web interface are available. The export parameters specify how the data should be exported, such as whether to include images, internal IDs, and so on. The `export_object_set_general` function will initiate the export request.
+
+```{r}
+#| label: jobs-create-new
+
+filters_reqs <- ecotaxarapi::ProjectFilters()
+
+# export parameters
+export_reqs <- ecotaxarapi::GeneralExportReq(
+  project_id        = 5421,
+  split_by          = "none",
+  with_images       = "none", # "first" "all" "none"
+  with_internal_ids = TRUE,
+  with_types_row    = FALSE,
+  only_annotations  = FALSE,
+  out_to_ftp        = FALSE
+)
+
+# generate export request body
+export_request_body <- ecotaxarapi::Body_export_object_set_general_object_set_export_general_post(
+  filters = filters_reqs,
+  request = export_reqs
+)
+
+# execute export request
+ecotaxarapi::export_object_set_general(export_request_body)
+
+```
+
+## download
+
+The data are available to download when the job is complete. While it is possible to download the export with R, this is not ideal as the export is read into the R environment. Instead, we download the export using a shell script that can be run from the command line. The script will download the export files to a specified location.
+
+### access the download script from the ecotaxaLoadR package
+
+The download script is included in the `ecotaxaLoadR` package so it can be copied from the package directory to wherever you would like to access it.
+
+```{r}
+#| label: copy-the-download-script
+
+file.copy(
+  from = system.file("download_ecotaxa_file.sh", package = "ecotaxaLoadR"),
+  to   = "desired/location/"
+  )
+
+```
+
+### running the download script
+
+Make the file executable:
+
+```{sh}
+#| label: make-executable
+
+❯ chmod +x download_ecotaxa_file.sh
+```
+
+The script requires three arguments: the job ID, the path to a file containing your API token, and the output file path and name where the download file will be saved. Optionally, you can specify `--unzip` to extract the ZIP file after downloading.
+
+```{sh}
+#| label: execute-the-script
+
+❯ ./download_ecotaxa_file.sh --help
+
+Usage: ./download_ecotaxa_file.sh [options] <job_id> <token_file_path> <output_file_path>
+
+Download a job file from the EcoTaxa API and optionally extract it.
+
+Arguments:
+  job_id             The numeric job ID from EcoTaxa.
+  token_file_path    Path to a file containing your API bearer token.
+  output_file_path   Path (with filename) where the downloaded file will be saved.
+
+Options:
+  --unzip            Extract the ZIP file after download (default: off)
+  --help             Display this help message and exit.
+
+Examples:
+  # Download only (no extraction)
+  ./download_ecotaxa_file.sh 149243 ~/.ecotaxa_token ./job_149243_output.zip
+
+  # Download and extract the zip
+  ./download_ecotaxa_file.sh --unzip 149243 ~/.ecotaxa_token ./output.zip
+```

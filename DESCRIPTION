@@ -24,5 +24,8 @@ Imports:
     tools,
     utils
 Suggests: 
+    knitr,
+    quarto,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+VignetteBuilder: quarto
