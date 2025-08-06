@@ -1,11 +1,15 @@
 #' @title Annotate EcoTaxa records as day or night based on ship position, and
-#'   collection date and time.
+#'   (collection) date and time.
 #'
-#' @description \code{annotate_daytime} annotates whether a given observation in
-#'   an EcoTaxa record was collected during the day or night based on ship
-#'   position, and collection date and time. The function assumes that the
-#'   collection time is provided in UTC. Columns for date, time, latitude, and
-#'   longitude must be included.
+#' @description \code{annotate_daytime} annotates whether a given observation
+#'   was collected during the day or night based on ship
+#'   position, and observation date and time. The function assumes that the
+#'   collection time is provided in GMT. Columns for date, time (or datetime), latitude, and
+#'   longitude must be included in the data.
+#'
+#' @note This function uses parallel processing via the \code{furrr} 
+#'   package. Use \code{setup_parallel_ecotaxa()} to configure parallel 
+#'   processing before calling this function, or it will run sequentially.
 #'
 #' @param eco_taxa_df (character) Unquoted name of EcoTaxa resource in the R
 #'   environment.
@@ -23,6 +27,10 @@
 #'
 #' @examples
 #' \dontrun{
+#'
+#' # set up parallel processing for all ecotaxaLoadR functions
+#' setup_parallel_ecotaxa(workers = 4)
+#'
 #' eco_taxa_df <- data.frame(
 #'   cruise = c("cruise1", "cruise1"),
 #'   moc = c("moc1", "moc1"),
@@ -33,14 +41,14 @@
 #' )
 #' result <- annotate_daytime(eco_taxa_df)
 #' print(result)
+#'
+#' # reset when done
+#' reset_parallel_ecotaxa()
 #' }
 #'
 #' @export
 #'
-annotate_daytime <- function(
-  eco_taxa_df,
-  workers = future::availableCores() - 1
-) {
+annotate_daytime <- function(eco_taxa_df) {
 
   required_cols <- c(
     "object_lat",
@@ -67,13 +75,6 @@ annotate_daytime <- function(
       object_date,
       object_time
     )
-
-  # ensure the plan is reset when the function exits
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add = TRUE)
-
-  # set up parallel backend
-  future::plan(future::multisession, workers = workers)
 
   distinct_time_pos$is_day <- furrr::future_pmap_lgl(
     list(
