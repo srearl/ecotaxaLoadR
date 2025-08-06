@@ -206,7 +206,23 @@ ingest_pro_file <- function(file_path) {
   }
   
   # add file metadata
-  data$file_name <- basename(file_path)
+  filename       <- basename(file_path)
+  data$file_name <- filename
+  
+
+  # extract MOC number from filename
+  if (grepl("(?i)moc", filename) && grepl("[0-9]+", filename)) {
+    moc_number <- as.numeric(stringr::str_extract(filename, "[0-9]+"))
+    data$moc   <- moc_number
+    cat("Extracted MOC number:", moc_number, "from filename\n")
+
+  } else {
+
+    data$moc <- NA_real_
+    cat("MOC number not found in filename\n")
+
+  }
+
   
   # convert time column to datetime
   if ("time" %in% names(data)) {

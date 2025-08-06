@@ -119,6 +119,16 @@ load_eco_taxa <- function(
           sep = "_"
         ),
         cruise_moc_net = tolower(cruise_moc_net),
+        moc = ifelse(
+          grepl("\\d+", moc),
+          as.integer(stringr::str_extract(moc, "\\d+")),
+          NA_integer_
+        ),
+        net = ifelse(
+          grepl("\\d+", net),
+          as.integer(stringr::str_extract(net, "\\d+")),
+          NA_integer_
+        ),
         object_area_mm2 = dplyr::case_when(
           grepl("4800", process_img_resolution, ignore.case = TRUE) ~
             object_area * (0.005291667^2),
