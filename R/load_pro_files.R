@@ -8,6 +8,8 @@
 #'
 #' @param directory Character string. Directory path containing PRO files.
 #'   Default is current directory (".").
+#' @param daynight Boolean. Whether to annotate the data with day-night 
+#'   designation based on ship position and time of collection. Default is FALSE.
 #'
 #' @return A list of data frames, one for each successfully processed PRO file.
 #'   The list has attributes containing processing summary information:
@@ -30,6 +32,9 @@
 #' # Process all PRO files in current directory
 #' all_data <- load_pro_files()
 #'
+#' # Process files with day/night annotation
+#' all_data <- load_pro_files(daynight = TRUE)
+#'
 #' # Process files in specific directory
 #' all_data <- load_pro_files("path/to/pro/files")
 #'
@@ -46,7 +51,10 @@
 #' @seealso \code{\link{ingest_pro_file}} for processing individual files
 #'
 #' @export
-load_pro_files <- function(directory = ".") {
+load_pro_files <- function(
+  directory = ".",
+  daynight  = FALSE
+  ) {
 
   # initialize tracking variables for failed files
   failed_files   <- character(0)
@@ -59,7 +67,11 @@ load_pro_files <- function(directory = ".") {
     stop("DNF PRO files in this directory: ", directory)
   }
 
-  cat("Found", length(pro_files), "PRO files to process\n\n")
+  cat("Found", length(pro_files), "PRO files to process\n")
+  if (daynight) {
+    cat("Day/night annotation enabled\n")
+  }
+  cat("\n")
 
   # process each file using purrr::map with safe error handling
   pro_data_list <- purrr::imap(
@@ -78,7 +90,7 @@ load_pro_files <- function(directory = ".") {
 
       # use safely to handle errors gracefully
       safe_ingest <- purrr::safely(ingest_pro_file)
-      result      <- safe_ingest(.x)
+      result      <- safe_ingest(.x, daynight = daynight)  # Pass daynight parameter
 
       if (!is.null(result$error)) {
         error_msg <- result$error$message
@@ -177,7 +189,7 @@ load_pro_files <- function(directory = ".") {
 #' @export
 ingest_pro_file <- function(
   file_path,
-  daynight = TRUE
+  daynight = FALSE
   ) {
   cat("Processing file:", file_path, "\n")
 
@@ -224,7 +236,12 @@ ingest_pro_file <- function(
   data$file_name <- filename
 
   # extract MOC number from filename
-  if (grepl("(?i)moc", filename) && grepl("[0-9]+", filename)) {
+  # Handle both "MOC" and "M" prefixes
+  if (
+    (grepl("(?i)moc", filename) || grepl("(?i)^m[0-9]+", filename)) &&
+      grepl("[0-9]+", filename)
+  ) {
+    # Extract the first number found in the filename
     moc_number <- as.numeric(stringr::str_extract(filename, "[0-9]+"))
     data$moc <- moc_number
     cat("Extracted MOC number:", moc_number, "from filename\n")
@@ -291,7 +308,7 @@ ingest_pro_file <- function(
 #'
 #' @description Parses the header section of a MOCNESS PRO file to extract
 #' metadata including tow information, date, instrument serial numbers, and
-#' calibration data.
+#' calibration data. Handles different tow line formats.
 #'
 #' @param file_path Character string. Path to the PRO file to process.
 #'
@@ -309,7 +326,7 @@ ingest_pro_file <- function(
 #'   \item{flow_meter_units}{Character. Flow meter units}
 #'
 #' @importFrom readr read_lines
-#' @importFrom stringr str_split str_extract
+#' @importFrom stringr str_split str_extract str_trim
 #' @importFrom lubridate mdy
 #'
 #' @keywords internal
@@ -320,13 +337,43 @@ extract_pro_metadata <- function(file_path) {
   # initialize metadata list
   metadata <- list()
 
-  # extract tow information
+  # extract tow information - handle different formats
   tow_line <- header_lines[grepl("^%.*Tow:", header_lines)]
   if (length(tow_line) > 0) {
+    # Split by whitespace and remove empty elements
     tow_parts <- stringr::str_split(tow_line, "\\s+")[[1]]
-    metadata$tow_number <- as.numeric(tow_parts[3])
-    metadata$vessel <- paste(tow_parts[4:5], collapse = " ")
-    metadata$cruise_id <- tow_parts[6]
+    tow_parts <- tow_parts[tow_parts != ""]  # Remove empty strings
+    
+    if (length(tow_parts) >= 4) {
+      metadata$tow_number <- as.numeric(tow_parts[3])
+      
+      # Handle different vessel/cruise formats
+      if (length(tow_parts) == 5) {
+        # Format: %	Tow:	1  AE  AE2214
+        # tow_parts[4] = vessel (e.g., "AE")
+        # tow_parts[5] = cruise (e.g., "AE2214")
+        metadata$vessel <- stringr::str_trim(tow_parts[4])
+        metadata$cruise_id <- stringr::str_trim(tow_parts[5])
+      } else if (length(tow_parts) >= 6) {
+        # Format: %	Tow:	13  Sally Ride  SR2408
+        # tow_parts[4:5] = vessel (e.g., "Sally", "Ride")
+        # tow_parts[6] = cruise (e.g., "SR2408")
+        metadata$vessel <- paste(stringr::str_trim(tow_parts[4:5]), collapse = " ")
+        metadata$cruise_id <- stringr::str_trim(tow_parts[6])
+      } else {
+        # Fallback: treat everything after tow number as vessel
+        remaining_parts <- tow_parts[4:length(tow_parts)]
+        if (length(remaining_parts) > 1) {
+          # Assume last part is cruise_id, rest is vessel
+          metadata$vessel <- paste(remaining_parts[1:(length(remaining_parts)-1)], collapse = " ")
+          metadata$cruise_id <- remaining_parts[length(remaining_parts)]
+        } else {
+          # Only one remaining part - treat as vessel
+          metadata$vessel <- remaining_parts[1]
+          metadata$cruise_id <- NA_character_
+        }
+      }
+    }
   }
 
   # extract date

@@ -4,7 +4,7 @@
 \alias{ingest_pro_file}
 \title{Load and process MOCNESS PRO file}
 \usage{
-ingest_pro_file(file_path, daynight = TRUE)
+ingest_pro_file(file_path, daynight = FALSE)
 }
 \arguments{
 \item{file_path}{Character string. Path to the PRO file to process.}

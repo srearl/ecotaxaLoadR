@@ -26,6 +26,6 @@ A list containing extracted metadata with elements:
 \description{
 Parses the header section of a MOCNESS PRO file to extract
 metadata including tow information, date, instrument serial numbers, and
-calibration data.
+calibration data. Handles different tow line formats.
 }
 \keyword{internal}

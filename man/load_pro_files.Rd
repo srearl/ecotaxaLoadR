@@ -4,11 +4,14 @@
 \alias{load_pro_files}
 \title{Load multiple PRO files}
 \usage{
-load_pro_files(directory = ".")
+load_pro_files(directory = ".", daynight = FALSE)
 }
 \arguments{
 \item{directory}{Character string. Directory path containing PRO files.
 Default is current directory (".").}
+
+\item{daynight}{Boolean. Whether to annotate the data with day-night
+designation based on ship position and time of collection. Default is FALSE.}
 }
 \value{
 A list of data frames, one for each successfully processed PRO file.
@@ -39,6 +42,9 @@ a one, specific PRO file.
 \dontrun{
 # Process all PRO files in current directory
 all_data <- load_pro_files()
+
+# Process files with day/night annotation
+all_data <- load_pro_files(daynight = TRUE)
 
 # Process files in specific directory
 all_data <- load_pro_files("path/to/pro/files")
