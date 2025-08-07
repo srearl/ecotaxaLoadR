@@ -6,7 +6,7 @@
 #' @note See \code{ingest_pro_file} in this package to harvest information from
 #' a one, specific PRO file.
 #'
-#' @param directory Character string. Directory path containing PRO files. 
+#' @param directory Character string. Directory path containing PRO files.
 #'   Default is current directory (".").
 #'
 #' @return A list of data frames, one for each successfully processed PRO file.
@@ -29,13 +29,13 @@
 #' \dontrun{
 #' # Process all PRO files in current directory
 #' all_data <- load_pro_files()
-#' 
+#'
 #' # Process files in specific directory
 #' all_data <- load_pro_files("path/to/pro/files")
-#' 
+#'
 #' # Combine all successful files into single data frame
 #' combined_data <- dplyr::bind_rows(all_data)
-#' 
+#'
 #' # Check for any failed files
 #' attr(all_data, "failed_files")
 #' }
@@ -51,7 +51,7 @@ load_pro_files <- function(directory = ".") {
   # initialize tracking variables for failed files
   failed_files   <- character(0)
   error_messages <- character(0)
-    
+
   all_files <- list.files(directory, full.names = TRUE)
   pro_files <- all_files[tolower(tools::file_ext(all_files)) == "pro"]
 
@@ -81,20 +81,17 @@ load_pro_files <- function(directory = ".") {
       result      <- safe_ingest(.x)
 
       if (!is.null(result$error)) {
-
         error_msg <- result$error$message
         cat("Error processing", file_name, ":", error_msg, "\n\n")
 
         # track failed files (using <<- to modify parent scope variables)
-        failed_files   <<- c(failed_files, file_name)
+        failed_files <<- c(failed_files, file_name)
         error_messages <<- c(error_messages, error_msg)
 
         return(NULL)
-
       }
 
       return(result$result)
-
     }
   )
 
@@ -107,11 +104,16 @@ load_pro_files <- function(directory = ".") {
   cat("Total files found:", length(pro_files), "\n")
   cat("Successfully processed:", length(pro_data_list), "\n")
   cat("Failed to process:", length(failed_files), "\n")
-  
+
   if (length(failed_files) > 0) {
     cat("\nFailed files:\n")
     for (i in seq_along(failed_files)) {
-      cat(sprintf("  %d. %s\n     Error: %s\n", i, failed_files[i], error_messages[i]))
+      cat(sprintf(
+        "  %d. %s\n     Error: %s\n",
+        i,
+        failed_files[i],
+        error_messages[i]
+      ))
     }
   } else {
     cat("All files processed successfully!\n")
@@ -119,8 +121,8 @@ load_pro_files <- function(directory = ".") {
   cat("\n")
 
   # add failed files information as attributes to the result
-  attr(pro_data_list, "failed_files")       <- failed_files
-  attr(pro_data_list, "error_messages")     <- error_messages
+  attr(pro_data_list, "failed_files") <- failed_files
+  attr(pro_data_list, "error_messages") <- error_messages
   attr(pro_data_list, "processing_summary") <- list(
     total_files      = pro_files,
     successful_files = pro_data_list,
@@ -128,7 +130,6 @@ load_pro_files <- function(directory = ".") {
   )
 
   return(pro_data_list)
-
 }
 
 
@@ -139,6 +140,8 @@ load_pro_files <- function(directory = ".") {
 #' coordinates.
 #'
 #' @param file_path Character string. Path to the PRO file to process.
+#' @param daynight (boolean) Boolean indicating whether to annotate the data
+#'   with a day-night designation based on ship position and time of collection.
 #'
 #' @return A data frame containing the processed PRO file data with additional columns:
 #'   \item{datetime_gmt}{POSIXct. Datetime in GMT timezone}
@@ -161,7 +164,7 @@ load_pro_files <- function(directory = ".") {
 #' \dontrun{
 #' # Load a single PRO file
 #' data <- ingest_pro_file("MOC1_01A.PRO")
-#' 
+#'
 #' # View the structure
 #' str(data)
 #' }
@@ -172,74 +175,87 @@ load_pro_files <- function(directory = ".") {
 #' @importFrom lubridate year with_tz
 #'
 #' @export
-ingest_pro_file <- function(file_path) {
-
+ingest_pro_file <- function(
+  file_path,
+  daynight = TRUE
+  ) {
   cat("Processing file:", file_path, "\n")
-  
+
   # extract metadata
   metadata <- extract_pro_metadata(file_path)
-  cat("Extracted metadata for Tow", metadata$tow_number, "on", as.character(metadata$date), "\n")
-  
+  cat(
+    "Extracted metadata for Tow",
+    metadata$tow_number,
+    "on",
+    as.character(metadata$date),
+    "\n"
+  )
+
   # Find the header line (starts with "time")
   all_lines       <- readr::read_lines(file_path)
   header_line_idx <- which(stringr::str_detect(all_lines, "^time\\s+"))
-  
+
   if (length(header_line_idx) == 0) {
     stop("Could not find data header line starting with 'time'")
   }
-  
+
   # read the data starting from the line after the header
   data <- readr::read_table(
-    file           = file_path,
-    skip           = header_line_idx - 1, # skip header lines
-    col_names      = TRUE,
+    file = file_path,
+    skip = header_line_idx - 1, # skip header lines
+    col_names = TRUE,
     show_col_types = FALSE
   )
-  
+
   cat("Read", nrow(data), "data rows with", ncol(data), "columns\n")
-   
+
   # add header metadata as columns (repeat for each data row)
   if (length(metadata) > 0) {
-    purrr::iwalk(metadata, ~ {
-      data[[.y]] <<- .x
-    })
+    purrr::iwalk(
+      metadata,
+      ~ {
+        data[[.y]] <<- .x
+      }
+    )
   }
-  
+
   # add file metadata
-  filename       <- basename(file_path)
+  filename <- basename(file_path)
   data$file_name <- filename
-  
 
   # extract MOC number from filename
   if (grepl("(?i)moc", filename) && grepl("[0-9]+", filename)) {
     moc_number <- as.numeric(stringr::str_extract(filename, "[0-9]+"))
-    data$moc   <- moc_number
+    data$moc <- moc_number
     cat("Extracted MOC number:", moc_number, "from filename\n")
-
   } else {
-
     data$moc <- NA_real_
     cat("MOC number not found in filename\n")
-
   }
 
-  
   # convert time column to datetime
   if ("time" %in% names(data)) {
-
     # convert to gmt datetime
-    data$datetime_gmt <- convert_doy_to_datetime(data$time, lubridate::year(metadata$date), "GMT")
+    data$datetime_gmt <- convert_doy_to_datetime(
+      data$time,
+      lubridate::year(metadata$date),
+      "GMT"
+    )
 
     # get local timezone from coordinates
     local_tz <- get_timezone_from_coords(data$lat, data$lon)
     cat("Detected local timezone as:", local_tz, "\n")
-    
+
     # convert to local time
     data$datetime_local <- lubridate::with_tz(data$datetime_gmt, local_tz)
-    data$timezone       <- local_tz
+    data$timezone <- local_tz
+
+    if (daynight == TRUE) {
+      data <- annotate_daytime(data)
+    }
 
   }
-  
+
   cat("processed PRO file with", nrow(data), "records\n")
   cat(
     "Time range:",
@@ -266,9 +282,8 @@ ingest_pro_file <- function(file_path) {
     round(max(data$lon, na.rm = TRUE), 4),
     "\n\n"
   )
-  
-  return(data)
 
+  return(data)
 }
 
 
@@ -299,64 +314,65 @@ ingest_pro_file <- function(file_path) {
 #'
 #' @keywords internal
 extract_pro_metadata <- function(file_path) {
-
   # read first few lines to get header information
   header_lines <- readr::read_lines(file_path, n_max = 10)
-  
+
   # initialize metadata list
   metadata <- list()
-  
+
   # extract tow information
   tow_line <- header_lines[grepl("^%.*Tow:", header_lines)]
   if (length(tow_line) > 0) {
-    tow_parts           <- stringr::str_split(tow_line, "\\s+")[[1]]
+    tow_parts <- stringr::str_split(tow_line, "\\s+")[[1]]
     metadata$tow_number <- as.numeric(tow_parts[3])
-    metadata$vessel     <- paste(tow_parts[4:5], collapse = " ")
-    metadata$cruise_id  <- tow_parts[6]
+    metadata$vessel <- paste(tow_parts[4:5], collapse = " ")
+    metadata$cruise_id <- tow_parts[6]
   }
-  
+
   # extract date
   date_line <- header_lines[grepl("^%.*Date:", header_lines)]
   if (length(date_line) > 0) {
-    date_str      <- stringr::str_extract(date_line, "\\d+/\\d+/\\d+")
+    date_str <- stringr::str_extract(date_line, "\\d+/\\d+/\\d+")
     metadata$date <- lubridate::mdy(date_str)
   }
-  
+
   # extract instrument serial numbers
   temp_line <- header_lines[grepl("Temperature.*Probe", header_lines)]
   if (length(temp_line) > 0) {
     metadata$temperature_probe <- stringr::str_extract(temp_line, "\\d+")
   }
-  
+
   cond_line <- header_lines[grepl("Conductivity.*Probe", header_lines)]
   if (length(cond_line) > 0) {
     metadata$conductivity_probe <- stringr::str_extract(cond_line, "\\d+$")
   }
-  
+
   press_line <- header_lines[grepl("Pressure.*Probe", header_lines)]
   if (length(press_line) > 0) {
     metadata$pressure_probe <- stringr::str_extract(press_line, "\\d+")
   }
-  
+
   oxygen_line <- header_lines[grepl("Oxygen.*Probe", header_lines)]
   if (length(oxygen_line) > 0) {
     metadata$oxygen_probe <- stringr::str_extract(oxygen_line, "\\d+$")
   }
-  
+
   fluor_line <- header_lines[grepl("Fluorometer", header_lines)]
   if (length(fluor_line) > 0) {
     metadata$fluorometer <- stringr::str_extract(fluor_line, "[A-Z]+\\d+")
   }
-  
+
   # extract flow meter calibration
   flow_line <- header_lines[grepl("Flow.*Meter.*Calibration", header_lines)]
   if (length(flow_line) > 0) {
-    metadata$flow_meter_calibration <- as.numeric(stringr::str_extract(flow_line, "\\d+\\.\\d+"))
-    metadata$flow_meter_units       <- stringr::str_extract(flow_line, "\\([^)]+\\)")
+    metadata$flow_meter_calibration <- as.numeric(stringr::str_extract(
+      flow_line,
+      "\\d+\\.\\d+"
+    ))
+    metadata$flow_meter_units <- stringr::str_extract(flow_line, "\\([^)]+\\)")
   }
-  
-  return(metadata)
 
+  return(metadata)
 }
 
 
@@ -384,21 +400,21 @@ convert_doy_to_datetime <- function(
   doy_decimal,
   year,
   timezone = "GMT"
-  ) {
-
+) {
   # split into day of year and decimal time
-  doy          <- floor(doy_decimal)
+  doy <- floor(doy_decimal)
   decimal_time <- doy_decimal - doy
-  
-  # convert to datetime
-  start_of_year  <- lubridate::as_datetime(paste0(year, "-01-01"), tz = timezone)
-  days_to_add    <- doy - 1  # DOY 1 = Jan 1
-  seconds_to_add <- decimal_time * 24 * 3600  # Convert decimal day to seconds
-  
-  datetime <- start_of_year + lubridate::days(days_to_add) + lubridate::seconds(seconds_to_add)
-  
-  return(datetime)
 
+  # convert to datetime
+  start_of_year <- lubridate::as_datetime(paste0(year, "-01-01"), tz = timezone)
+  days_to_add <- doy - 1 # DOY 1 = Jan 1
+  seconds_to_add <- decimal_time * 24 * 3600 # Convert decimal day to seconds
+
+  datetime <- start_of_year +
+    lubridate::days(days_to_add) +
+    lubridate::seconds(seconds_to_add)
+
+  return(datetime)
 }
 
 
@@ -430,15 +446,13 @@ get_timezone_from_coords <- function(
   if (length(valid_coords) > 0) {
     first_valid <- valid_coords[1]
     tz <- lutz::tz_lookup_coords(
-      lat    = lat[first_valid],
-      lon    = lon[first_valid],
+      lat = lat[first_valid],
+      lon = lon[first_valid],
       method = "accurate"
     )
 
     return(tz)
-
   }
 
   return("GMT") # Default to GMT if no valid coordinates
-
 }

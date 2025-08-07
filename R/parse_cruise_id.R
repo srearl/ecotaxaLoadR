@@ -22,7 +22,7 @@ parse_cruise_id <- function(
 
   # test for data collection type from a subsample of the data
   set.seed(123)
-  sample_size <- min(1000,             nrow(ecotaxa_file))
+  sample_size <- min(1000, nrow(ecotaxa_file))
   subsample   <- ecotaxa_file[sample(x = nrow(ecotaxa_file), size = sample_size), , drop = FALSE]
 
   flowcam_pattern_true <- FALSE

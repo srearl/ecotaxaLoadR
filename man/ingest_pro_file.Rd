@@ -4,10 +4,13 @@
 \alias{ingest_pro_file}
 \title{Load and process MOCNESS PRO file}
 \usage{
-ingest_pro_file(file_path)
+ingest_pro_file(file_path, daynight = TRUE)
 }
 \arguments{
 \item{file_path}{Character string. Path to the PRO file to process.}
+
+\item{daynight}{(boolean) Boolean indicating whether to annotate the data
+with a day-night designation based on ship position and time of collection.}
 }
 \value{
 A data frame containing the processed PRO file data with additional columns:

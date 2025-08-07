@@ -2,31 +2,52 @@
 % Please edit documentation in R/annotate_daytime.R
 \name{annotate_daytime}
 \alias{annotate_daytime}
-\title{Annotate EcoTaxa records as day or night based on ship position, and
-collection date and time.}
+\title{Annotate records as day or night based on position and datetime}
 \usage{
-annotate_daytime(eco_taxa_df, workers = future::availableCores() - 1)
+annotate_daytime(data)
 }
 \arguments{
-\item{eco_taxa_df}{(character) Unquoted name of EcoTaxa resource in the R
-environment.}
-
-\item{workers}{(integer) The number of parallel workers to use. Defaults to
-one less than the available cores.}
+\item{data}{(data.frame) Input data frame containing either EcoTaxa format
+or PRO data format.}
 }
 \value{
 The input data as a data frame with an additional column \code{is_day}
-indicating whether the observation occurred during daytime (TRUE).
+indicating whether the observation occurred during daytime (TRUE) based on
+nautical twilight calculations.
 }
 \description{
-\code{annotate_daytime} annotates whether a given observation in
-an EcoTaxa record was collected during the day or night based on ship
-position, and collection date and time. The function assumes that the
-collection time is provided in UTC. Columns for date, time, latitude, and
-longitude must be included.
+\code{annotate_daytime} annotates whether a given observation
+was collected during the day or night based on position and datetime.
+The function can handle two data source types:
+\itemize{
+\item EcoTaxa data: requires columns \code{object_lat}, \code{object_lon},
+\code{object_date}, and \code{object_time}
+\item PRO data: requires columns \code{lat}, \code{lon},
+and \code{datetime_gmt}
+}
+The function automatically detects the data source based on available columns.
+}
+\details{
+The function performs day/night classification using solar position
+calculations with nautical twilight as the threshold. For EcoTaxa data,
+the function operates on distinct combinations of position and datetime
+to optimize performance, then joins results back. For PRO data, the function
+processes all records individually without deduplication. For EcoTaxa data,
+the function assumes that date and time are in GMT. For PRO data, it uses
+the provided \code{datetime_gmt} column directly.
+}
+\note{
+This function uses parallel processing via the \code{furrr}
+package. Use \code{setup_parallel_ecotaxa()} to configure parallel
+processing before calling this function, or it will run sequentially.
 }
 \examples{
 \dontrun{
+
+# Set up parallel processing for all ecotaxaLoadR functions
+setup_parallel_ecotaxa(workers = 4)
+
+# Example with EcoTaxa data
 eco_taxa_df <- data.frame(
   cruise = c("cruise1", "cruise1"),
   moc = c("moc1", "moc1"),
@@ -35,8 +56,19 @@ eco_taxa_df <- data.frame(
   object_date = c("2025-03-26", "2025-03-26"),
   object_time = c("12:00:00", "13:00:00")
 )
-result <- annotate_daytime(eco_taxa_df)
-print(result)
+result_eco <- annotate_daytime(eco_taxa_df)
+
+# Example with PRO data
+pro_data <- data.frame(
+  lat = c(27.32393, 27.32392),
+  lon = c(-111.28438, -111.28438),
+  datetime_gmt = as.POSIXct(c("2024-05-04 18:03:09", "2024-05-04 18:03:11")),
+  temp = c(23.423, 23.369)
+)
+result_pro <- annotate_daytime(pro_data)
+
+# Reset when done
+reset_parallel_ecotaxa()
 }
 
 }
