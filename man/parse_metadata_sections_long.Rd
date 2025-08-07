@@ -23,6 +23,8 @@ A tibble with columns:
 \description{
 Parses the metadata sections from PID file header lines,
 extracting key-value pairs organized by section headers into a long-format tibble.
+Also parses SampleId and Date fields from the Sample subsection to extract
+cruise, moc, net, and sample_date information.
 }
 \details{
 The function processes metadata by:
@@ -31,6 +33,8 @@ The function processes metadata by:
 \item Parsing key=value pairs within each section
 \item Propagating section names to associated key-value pairs
 \item Adding filename as a special metadata record
+\item Parsing SampleId to extract cruise, moc, and net components
+\item Parsing Date field from Sample section to extract sample_date
 \item Returning data in long format for easy filtering and analysis
 }
 }

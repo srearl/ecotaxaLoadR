@@ -8,7 +8,7 @@
 #'
 #' @return A list containing:
 #'   \item{metadata}{Tibble with combined metadata from all files}
-#'   \item{records}{Tibble with combined image records from all files}
+#'   \item{records}{Tibble with combined iage records from all files}
 #'   \item{attributes}{Tibble with combined image attributes from all files}
 #'   \item{file_count}{Integer. Number of files processed}
 #'   \item{processed_files}{Character vector. Names of successfully processed files}
@@ -332,6 +332,8 @@ parse_data_section_long <- function(data_lines, headers, scan_id, filename) {
 #' @title Parse Metadata Sections from PID File Header
 #' @description Parses the metadata sections from PID file header lines,
 #'   extracting key-value pairs organized by section headers into a long-format tibble.
+#'   Also parses SampleId and Date fields from the Sample subsection to extract
+#'   cruise, moc, net, and sample_date information.
 #'
 #' @param metadata_lines Character vector. Lines containing metadata from file header.
 #' @param scan_id Character string. Unique identifier for this scan.
@@ -350,6 +352,8 @@ parse_data_section_long <- function(data_lines, headers, scan_id, filename) {
 #'   \item Parsing key=value pairs within each section
 #'   \item Propagating section names to associated key-value pairs
 #'   \item Adding filename as a special metadata record
+#'   \item Parsing SampleId to extract cruise, moc, and net components
+#'   \item Parsing Date field from Sample section to extract sample_date
 #'   \item Returning data in long format for easy filtering and analysis
 #' }
 #'
@@ -440,9 +444,126 @@ parse_metadata_sections_long <- function(metadata_lines, scan_id, filename) {
     )
   }
 
-  # Combine filename record with metadata records
-  metadata <- dplyr::bind_rows(filename_record, metadata_records)
+  # Parse SampleId and Date from Sample section
+  parsed_fields <- parse_sample_fields(metadata_records, scan_id)
+
+  # Combine all metadata records
+  metadata <- dplyr::bind_rows(filename_record, metadata_records, parsed_fields)
 
   return(metadata)
+}
 
+
+#' @title Parse Sample Fields from Metadata
+#' @description Parses SampleId and Date fields from the Sample section of metadata
+#'   to extract cruise, moc, net, and sample_date components using purrr functional programming.
+#'
+#' @param metadata_records Tibble. Processed metadata records.
+#' @param scan_id Character string. Unique identifier for this scan.
+#'
+#' @return A tibble with parsed fields added as new metadata records.
+#'
+#' @importFrom tibble tibble
+#' @importFrom dplyr filter pull bind_rows
+#' @importFrom stringr str_extract str_sub str_match
+#' @importFrom lubridate ymd
+#' @importFrom purrr map_dfr pmap_dfr keep compact
+#'
+#' @keywords internal
+parse_sample_fields <- function(metadata_records, scan_id) {
+  
+  # Define SampleId patterns (similar to parse_cruise_id approach)
+  sample_id_patterns <- list(
+    pattern1 = "^([a-zA-Z]+[0-9]+)_([a-zA-Z])([0-9]+)_([a-zA-Z])([0-9]+)$"  # e.g., sr2408_m13_n8
+    # Add more patterns here as needed in the future
+  )
+  
+  # Parse SampleId using purrr
+  sample_id_records <- metadata_records |>
+    dplyr::filter(section_name == "Sample", key == "SampleId") |>
+    purrr::pmap_dfr(function(scan_id, section_name, key, value, ...) {
+      
+      # Try each pattern and return the first match
+      pattern_results <- sample_id_patterns |>
+        purrr::map(~ stringr::str_match(value, .x)) |>
+        purrr::keep(~ !is.na(.x[1]))
+      
+      if (length(pattern_results) > 0) {
+        # Use first successful match
+        matches <- pattern_results[[1]]
+        
+        # Create records for parsed components
+        # matches[1] = full match
+        # matches[2] = cruise (e.g., "sr2408")
+        # matches[3] = moc letter (e.g., "m") 
+        # matches[4] = moc number (e.g., "13") <- THIS is what we want
+        # matches[5] = net letter (e.g., "n")
+        # matches[6] = net number (e.g., "8") <- THIS is what we want
+        tibble::tibble(
+          scan_id = rep(scan_id, 3),
+          section_name = rep("parsed_sample", 3),
+          key = c("cruise", "moc", "net"),
+          value = c(matches[2], matches[4], matches[6])  # Fixed: use matches[4] and matches[6]
+        )
+      } else {
+        # No pattern matched - return empty tibble
+        tibble::tibble(
+          scan_id = character(0),
+          section_name = character(0),
+          key = character(0),
+          value = character(0)
+        )
+      }
+    })
+  
+  # Parse Date field using purrr
+  sample_date_records <- metadata_records |>
+    dplyr::filter(section_name == "Sample", key == "Date") |>
+    purrr::pmap_dfr(function(scan_id, section_name, key, value, ...) {
+      
+      # Extract date part (YYYYMMDD) before hyphen
+      date_part <- stringr::str_extract(value, "^[0-9]{8}")
+      
+      if (!is.na(date_part)) {
+        # Convert to ISO date format
+        sample_date <- tryCatch({
+          formatted_date <- paste0(
+            stringr::str_sub(date_part, 1, 4), "-",    # YYYY
+            stringr::str_sub(date_part, 5, 6), "-",    # MM  
+            stringr::str_sub(date_part, 7, 8)          # DD
+          )
+          as.character(lubridate::ymd(formatted_date))
+        }, error = function(e) NA_character_)
+        
+        if (!is.na(sample_date)) {
+          tibble::tibble(
+            scan_id = scan_id,
+            section_name = "parsed_sample",
+            key = "sample_date",
+            value = sample_date
+          )
+        } else {
+          # Date conversion failed
+          tibble::tibble(
+            scan_id = character(0),
+            section_name = character(0),
+            key = character(0),
+            value = character(0)
+          )
+        }
+      } else {
+        # No valid date part found
+        tibble::tibble(
+          scan_id = character(0),
+          section_name = character(0),
+          key = character(0),
+          value = character(0)
+        )
+      }
+    })
+  
+  # Combine all parsed records
+  parsed_records <- dplyr::bind_rows(sample_id_records, sample_date_records)
+  
+  return(parsed_records)
 }

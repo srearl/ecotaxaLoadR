@@ -15,7 +15,7 @@ Default is "\\.pid$" to match files ending in .pid.}
 \value{
 A list containing:
 \item{metadata}{Tibble with combined metadata from all files}
-\item{records}{Tibble with combined image records from all files}
+\item{records}{Tibble with combined iage records from all files}
 \item{attributes}{Tibble with combined image attributes from all files}
 \item{file_count}{Integer. Number of files processed}
 \item{processed_files}{Character vector. Names of successfully processed files}

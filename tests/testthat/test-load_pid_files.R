@@ -135,7 +135,8 @@ testthat::test_that("parse_metadata_sections_long works correctly", {
     "Scanning_area= large",
     "[Sample]", 
     "Project= hypoxia",
-    "SampleId= sr2407_m6_n3"
+    "SampleId= sr2407_m6_n3",
+    "Date= 20240504-2248"
   )
   
   result <- ecotaxaLoadR:::parse_metadata_sections_long(
@@ -161,6 +162,23 @@ testthat::test_that("parse_metadata_sections_long works correctly", {
   testthat::expect_true(any(result$section_name == "Sample"))
   testthat::expect_true(any(result$key == "Scanning_date"))
   testthat::expect_true(any(result$key == "Project"))
+  
+  # NEW: Check for parsed sample fields
+  testthat::expect_true(any(result$section_name == "parsed_sample"))
+  
+  parsed_fields <- result[result$section_name == "parsed_sample", ]
+  expected_keys <- c("cruise", "moc", "net", "sample_date")
+  
+  for (key in expected_keys) {
+    testthat::expect_true(key %in% parsed_fields$key, 
+                         info = paste("Missing parsed field:", key))
+  }
+  
+  # Check specific values
+  testthat::expect_equal(parsed_fields$value[parsed_fields$key == "cruise"], "sr2407")
+  testthat::expect_equal(parsed_fields$value[parsed_fields$key == "moc"], "6")
+  testthat::expect_equal(parsed_fields$value[parsed_fields$key == "net"], "3")
+  testthat::expect_equal(parsed_fields$value[parsed_fields$key == "sample_date"], "2024-05-04")
 })
 
 testthat::test_that("parse_data_section_long works correctly", {
@@ -366,4 +384,254 @@ testthat::test_that("PID functions handle edge cases gracefully", {
   
   testthat::expect_s3_class(headers_result, "data.frame")
   testthat::expect_equal(nrow(headers_result), 1)  # Should only have filename record
+})
+
+# NEW TESTS FOR SAMPLE FIELD PARSING
+
+testthat::test_that("parse_sample_fields extracts cruise, moc, and net from SampleId", {
+  # Create test metadata with SampleId
+  metadata_records <- tibble::tibble(
+    scan_id = "test_scan",
+    section_name = c("Sample", "Sample", "Image"),
+    key = c("SampleId", "Project", "Scanning_date"),
+    value = c("sr2407_m6_n3", "hypoxia", "20250701_1741")
+  )
+  
+  result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+  
+  testthat::expect_s3_class(result, "data.frame")
+  testthat::expect_true(nrow(result) > 0)
+  
+  # Check that cruise, moc, net are extracted
+  parsed_keys <- result$key
+  testthat::expect_true("cruise" %in% parsed_keys)
+  testthat::expect_true("moc" %in% parsed_keys)
+  testthat::expect_true("net" %in% parsed_keys)
+  
+  # Check values are correct
+  cruise_value <- result$value[result$key == "cruise"]
+  moc_value <- result$value[result$key == "moc"]
+  net_value <- result$value[result$key == "net"]
+  
+  testthat::expect_equal(cruise_value, "sr2407")
+  testthat::expect_equal(moc_value, "6")   # Just the number, not "m6"
+  testthat::expect_equal(net_value, "3")   # Just the number, not "n3"
+  
+  # Check section_name is correct
+  testthat::expect_true(all(result$section_name == "parsed_sample"))
+})
+
+testthat::test_that("parse_sample_fields extracts and converts Date field", {
+  # Create test metadata with Date field
+  metadata_records <- tibble::tibble(
+    scan_id = "test_scan",
+    section_name = c("Sample", "Sample"),
+    key = c("Date", "Project"),
+    value = c("20240504-2248", "test_project")
+  )
+  
+  result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+  
+  testthat::expect_s3_class(result, "data.frame")
+  testthat::expect_true("sample_date" %in% result$key)
+  
+  # Check date conversion
+  sample_date_value <- result$value[result$key == "sample_date"]
+  testthat::expect_equal(sample_date_value, "2024-05-04")
+})
+
+testthat::test_that("parse_sample_fields handles unmatched SampleId patterns", {
+  # Create test metadata with invalid SampleId format
+  metadata_records <- tibble::tibble(
+    scan_id = "test_scan",
+    section_name = "Sample",
+    key = "SampleId",
+    value = "invalid_format_123"
+  )
+  
+  result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+  
+  # Should return empty tibble for unmatched patterns
+  testthat::expect_equal(nrow(result), 0)
+})
+
+testthat::test_that("parse_sample_fields handles invalid Date formats", {
+  # Create test metadata with invalid Date format
+  metadata_records <- tibble::tibble(
+    scan_id = "test_scan",
+    section_name = "Sample",
+    key = "Date",
+    value = "invalid-date-format"
+  )
+  
+  result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+  
+  # Should handle invalid dates gracefully
+  date_records <- result[result$key == "sample_date", ]
+  testthat::expect_equal(nrow(date_records), 0)
+})
+
+testthat::test_that("parse_sample_fields works with different SampleId patterns", {
+  # Test different valid SampleId formats
+  test_cases <- list(
+    list(sample_id = "sr2407_m6_n3", expected = list(cruise = "sr2407", moc = "6", net = "3")),
+    list(sample_id = "ab1234_m13_n8", expected = list(cruise = "ab1234", moc = "13", net = "8")),
+    list(sample_id = "test2025_m1_n15", expected = list(cruise = "test2025", moc = "1", net = "15"))
+  )
+  
+  purrr::walk(test_cases, function(test_case) {
+    metadata_records <- tibble::tibble(
+      scan_id = "test_scan",
+      section_name = "Sample",
+      key = "SampleId",
+      value = test_case$sample_id
+    )
+    
+    result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+    
+    if (nrow(result) > 0) {
+      cruise_value <- result$value[result$key == "cruise"]
+      moc_value <- result$value[result$key == "moc"]
+      net_value <- result$value[result$key == "net"]
+      
+      testthat::expect_equal(cruise_value, test_case$expected$cruise)
+      testthat::expect_equal(moc_value, test_case$expected$moc)   # Just numbers
+      testthat::expect_equal(net_value, test_case$expected$net)   # Just numbers
+    } else {
+      testthat::fail(paste("Failed to parse SampleId:", test_case$sample_id))
+    }
+  })
+})
+
+testthat::test_that("parse_sample_fields handles multiple date formats", {
+  # Test different valid date formats
+  test_cases <- list(
+    list(date_input = "20240504-2248", expected = "2024-05-04"),
+    list(date_input = "20231225-1200", expected = "2023-12-25"),
+    list(date_input = "20250101-0000", expected = "2025-01-01")
+  )
+  
+  purrr::walk(test_cases, function(test_case) {
+    metadata_records <- tibble::tibble(
+      scan_id = "test_scan",
+      section_name = "Sample",
+      key = "Date",
+      value = test_case$date_input
+    )
+    
+    result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+    
+    if (nrow(result) > 0 && "sample_date" %in% result$key) {
+      date_value <- result$value[result$key == "sample_date"]
+      testthat::expect_equal(date_value, test_case$expected)
+    } else {
+      testthat::fail(paste("Failed to parse Date:", test_case$date_input))
+    }
+  })
+})
+
+testthat::test_that("parse_sample_fields handles combined SampleId and Date", {
+  # Test with both SampleId and Date in the same metadata
+  metadata_records <- tibble::tibble(
+    scan_id = rep("test_scan", 4),
+    section_name = c("Sample", "Sample", "Sample", "Image"),
+    key = c("SampleId", "Date", "Project", "Scanning_date"),
+    value = c("sr2408_m13_n8", "20240504-1530", "test_project", "20250701_1741")
+  )
+  
+  result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+  
+  testthat::expect_s3_class(result, "data.frame")
+  testthat::expect_true(nrow(result) > 0)
+  
+  # Should have all 4 parsed fields: cruise, moc, net, sample_date
+  expected_keys <- c("cruise", "moc", "net", "sample_date")
+  parsed_keys <- result$key
+  
+  for (key in expected_keys) {
+    testthat::expect_true(key %in% parsed_keys, 
+                         info = paste("Missing key:", key))
+  }
+  
+  # Check specific values
+  testthat::expect_equal(result$value[result$key == "cruise"], "sr2408")
+  testthat::expect_equal(result$value[result$key == "moc"], "13")     # Just the number
+  testthat::expect_equal(result$value[result$key == "net"], "8")      # Just the number
+  testthat::expect_equal(result$value[result$key == "sample_date"], "2024-05-04")
+})
+
+testthat::test_that("Integration: PID files with SampleId get parsed sample fields", {
+  # Test that real PID file parsing includes parsed sample fields
+  pid_file <- testthat::test_path("test-data", "pid_files", "sr2407_m6_n3_d2_b_1_dat1.pid")
+  
+  result <- ecotaxaLoadR:::parse_pid_file(pid_file)
+  
+  metadata <- result$image_metadata
+  
+  # Check if the file contains SampleId - if so, should have parsed fields
+  sample_id_present <- any(metadata$section_name == "Sample" & metadata$key == "SampleId")
+  
+  if (sample_id_present) {
+    # Should have parsed sample fields
+    testthat::expect_true(any(metadata$section_name == "parsed_sample"))
+    
+    parsed_fields <- metadata[metadata$section_name == "parsed_sample", ]
+    expected_keys <- c("cruise", "moc", "net")
+    
+    for (key in expected_keys) {
+      testthat::expect_true(key %in% parsed_fields$key, 
+                           info = paste("Missing parsed field:", key))
+    }
+    
+    # Check that cruise matches filename pattern
+    cruise_value <- parsed_fields$value[parsed_fields$key == "cruise"]
+    testthat::expect_true(grepl("sr2407", cruise_value))
+  }
+})
+
+testthat::test_that("Integration: complete workflow includes all parsed fields", {
+  # Test complete workflow from directory loading
+  test_dir <- testthat::test_path("test-data", "pid_files")
+  
+  result <- ecotaxaLoadR::load_pid_files(test_dir)
+  
+  metadata <- result$metadata
+  
+  # Check if any files had SampleId fields
+  sample_files <- any(metadata$section_name == "Sample" & metadata$key == "SampleId")
+  
+  if (sample_files) {
+    # Should have parsed sample fields
+    testthat::expect_true(any(metadata$section_name == "parsed_sample"))
+    
+    parsed_records <- metadata[metadata$section_name == "parsed_sample", ]
+    
+    # Should have parsed fields for files with SampleId
+    possible_keys <- c("cruise", "moc", "net", "sample_date")
+    present_keys <- unique(parsed_records$key)
+    
+    # At least some keys should be present
+    testthat::expect_true(length(intersect(possible_keys, present_keys)) > 0)
+  }
+})
+
+testthat::test_that("parse_sample_fields pattern extensibility", {
+  # This test verifies the pattern system is set up correctly for future extensions
+  metadata_records <- tibble::tibble(
+    scan_id = "test_scan",
+    section_name = "Sample",
+    key = "SampleId",
+    value = "sr2407_m6_n3"
+  )
+  
+  result <- ecotaxaLoadR:::parse_sample_fields(metadata_records, "test_scan")
+  
+  # Should work with current pattern
+  testthat::expect_true(nrow(result) > 0)
+  
+  # Test that the function structure supports adding new patterns
+  # (This is more of a code structure test)
+  testthat::expect_true("cruise" %in% result$key)
+  testthat::expect_true("moc" %in% result$key)
+  testthat::expect_true("net" %in% result$key)
 })
