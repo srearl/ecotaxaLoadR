@@ -227,14 +227,16 @@ load_eco_taxa <- function(
         ) |>
         dplyr::filter(unique_dates != 1)
 
-      # this is a stop because a fail will bork annotate_daytime()
-      stop(
+      daynight <- FALSE  # because this will bork annotate_daytime()
+
+      warning(
         "encountered a cruise-moc pair with more than one date: ",
         paste(
           cruise_moc_date$cruise,
           cruise_moc_date$moc,
           collapse = " "
-        )
+        ),
+        ". Forced `daynight = FALSE` to skip daytime annotation."
       )
     }
 
