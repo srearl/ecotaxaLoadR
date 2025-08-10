@@ -19,11 +19,14 @@ parse_cruise_id <- function(
   ecotaxa_file,
   debug = FALSE
 ) {
-
   # test for data collection type from a subsample of the data
   set.seed(123)
   sample_size <- min(1000, nrow(ecotaxa_file))
-  subsample   <- ecotaxa_file[sample(x = nrow(ecotaxa_file), size = sample_size), , drop = FALSE]
+  subsample <- ecotaxa_file[
+    sample(x = nrow(ecotaxa_file), size = sample_size),
+    ,
+    drop = FALSE
+  ]
 
   flowcam_pattern_true <- FALSE
   moc_pattern_true     <- FALSE
@@ -56,14 +59,14 @@ parse_cruise_id <- function(
     message("flowcam pattern matched")
 
     flowcam_patterns <- list(
-      flowcam_pattern = flowcam_pattern,
+      flowcam_pattern  = flowcam_pattern,
       flowcam_pattern2 = flowcam_pattern2
     )
 
     extracted_file <- extract_flowcam_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern = flowcam_patterns,
-      debug = debug
+      pattern      = flowcam_patterns,
+      debug        = debug
     )
 
     return(
@@ -82,7 +85,9 @@ parse_cruise_id <- function(
   pattern4 <- "^([0-9]{2})([0-9]{2})([0-9]{2})_([0-9]{4})_([0-9]{1}_[0-9]+)_([0-9]{1}_[0-9]+)$"
   pattern5 <- "^([0-9]{2})([0-9]{2})([0-9]{2})_([0-9]{4})_([0-9]+_[0-9]+)$"
   pattern6 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z0-9]+)_([0-9]+_[0-9]+)$"
-  pattern7 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_[a-zA-Z]_([0-9]+_[0-9]+)$"
+  # pattern7 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_[a-zA-Z]_([0-9]+_[0-9]+)$"
+  pattern8 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z])_([0-9]+_[0-9]+)$"
+  pattern10 <- "^([a-zA-Z]+[0-9]+)_m([0-9]+)_n([0-9]+)_d([0-9]+)_([ab])_([0-9]+)_([0-9]+)_([0-9]+)$" # Case 3: 8 parts, with lab_split (a or b)
 
   matches1 <- base::regmatches(
     ecotaxa_file$object_id,
@@ -104,42 +109,150 @@ parse_cruise_id <- function(
     ecotaxa_file$object_id,
     base::regexec(pattern6, ecotaxa_file$object_id)
   )
-  matches7 <- base::regmatches(
+  matches8 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern7, ecotaxa_file$object_id)
+    base::regexec(pattern8, ecotaxa_file$object_id)
+  )
+  matches10 <- base::regmatches(
+    ecotaxa_file$object_id,
+    base::regexec(pattern10, ecotaxa_file$object_id)
   )
 
-  moc_pattern_true <- all(
+  moc_pattern_true <- any(
     sapply(matches1, function(x) length(x) > 1) |
       sapply(matches3, function(x) length(x) > 1) |
       sapply(matches4, function(x) length(x) > 1) |
       sapply(matches5, function(x) length(x) > 1) |
       sapply(matches6, function(x) length(x) > 1) |
-      sapply(matches7, function(x) length(x) > 1)
+      sapply(matches8, function(x) length(x) > 1) |
+      sapply(matches10, function(x) length(x) > 1)
   )
+
+  # DEBUGGING
+  if (debug == TRUE) {
+    message("=== MOC PATTERN DEBUGGING ===")
+    message(
+      "Sample object_ids: ",
+      paste(head(ecotaxa_file$object_id, 3), collapse = ", ")
+    )
+
+    pattern_results <- list(
+      pattern1  = sum(sapply(matches1, function(x) length(x) > 1)),
+      pattern3  = sum(sapply(matches3, function(x) length(x) > 1)),
+      pattern4  = sum(sapply(matches4, function(x) length(x) > 1)),
+      pattern5  = sum(sapply(matches5, function(x) length(x) > 1)),
+      pattern6  = sum(sapply(matches6, function(x) length(x) > 1)),
+      pattern8  = sum(sapply(matches8, function(x) length(x) > 1)),
+      pattern10 = sum(sapply(matches10, function(x) length(x) > 1))
+    )
+
+    for (i in 1:length(pattern_results)) {
+      message(sprintf(
+        "%-10s: %d matches",
+        names(pattern_results)[i],
+        pattern_results[[i]]
+      ))
+    }
+
+    # Test pattern8 specifically on first few object_ids
+    test_ids <- head(ecotaxa_file$object_id, 5)
+    message("\nPattern8 testing on first 5 object_ids:")
+    for (id in test_ids) {
+      match_result <- regmatches(id, regexec(pattern8, id))
+      if (length(match_result[[1]]) > 1) {
+        message(sprintf(
+          "✓ %s -> %s",
+          id,
+          paste(match_result[[1]][-1], collapse = " | ")
+        ))
+      } else {
+        message(sprintf("✗ %s -> NO MATCH", id))
+      }
+    }
+    message("moc_pattern_true: ", moc_pattern_true)
+    message("===============================")
+  }
+
+  # DEBGUGGING
+  if (debug == TRUE) {
+    message("=== DETAILED UNMATCHED PATTERN ANALYSIS ===")
+
+    # Check which object_ids don't match any pattern
+    pattern_matches <- sapply(matches1, function(x) length(x) > 1) |
+      sapply(matches3, function(x) length(x) > 1) |
+      sapply(matches4, function(x) length(x) > 1) |
+      sapply(matches5, function(x) length(x) > 1) |
+      sapply(matches6, function(x) length(x) > 1) |
+      sapply(matches8, function(x) length(x) > 1) |
+      sapply(matches10, function(x) length(x) > 1)
+
+    total_rows     <- length(ecotaxa_file$object_id)
+    matched_rows   <- sum(pattern_matches)
+    unmatched_rows <- total_rows - matched_rows
+
+    message(sprintf("Total rows: %d", total_rows))
+    message(sprintf("Matched rows: %d", matched_rows))
+    message(sprintf("Unmatched rows: %d", unmatched_rows))
+    message(sprintf(
+      "Match percentage: %.2f%%",
+      (matched_rows / total_rows) * 100
+    ))
+
+    # Show examples of unmatched object_ids
+    if (unmatched_rows > 0) {
+      unmatched_ids <- ecotaxa_file$object_id[!pattern_matches]
+      message("\nFirst 10 unmatched object_ids:")
+      for (id in head(unmatched_ids, 10)) {
+        message(sprintf("  %s", id))
+      }
+
+      # Look for patterns in unmatched IDs
+      message("\nAnalyzing unmatched patterns...")
+      unique_unmatched <- unique(unmatched_ids)
+      if (length(unique_unmatched) <= 20) {
+        message("All unique unmatched patterns:")
+        for (pattern in unique_unmatched) {
+          message(sprintf("  %s", pattern))
+        }
+      } else {
+        message(sprintf(
+          "Too many unique patterns (%d). Showing first 20:",
+          length(unique_unmatched)
+        ))
+        for (pattern in head(unique_unmatched, 20)) {
+          message(sprintf("  %s", pattern))
+        }
+      }
+    } else {
+      message("All object_ids matched successfully!")
+    }
+
+    message("==============================================")
+  }
 
   if (moc_pattern_true == TRUE) {
     message("MOC pattern matched")
 
     moc_patterns <- list(
-      pattern1 = pattern1,
-      pattern3 = pattern3,
-      pattern4 = pattern4,
-      pattern5 = pattern5,
-      pattern6 = pattern6,
-      pattern7 = pattern7
+      pattern1  = pattern1,
+      pattern3  = pattern3,
+      pattern4  = pattern4,
+      pattern5  = pattern5,
+      pattern6  = pattern6,
+      pattern8  = pattern8,
+      pattern10 = pattern10
     )
 
     extracted_file <- extract_moc_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern = moc_patterns,
-      debug = debug
+      pattern      = moc_patterns,
+      debug        = debug
     )
 
     return(
       list(
         parsed_file = extracted_file,
-        pattern = "moc"
+        pattern     = "moc"
       )
     )
   }
@@ -167,14 +280,14 @@ parse_cruise_id <- function(
 
     extracted_file <- extract_uvp_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern = uvp_patterns,
-      debug = debug
+      pattern      = uvp_patterns,
+      debug        = debug
     )
 
     return(
       list(
         parsed_file = extracted_file,
-        pattern = "uvp"
+        pattern     = "uvp"
       )
     )
   }
@@ -214,13 +327,12 @@ extract_moc_columns <- function(
   pattern = moc_patterns,
   debug = FALSE
 ) {
-
-  ecotaxa_file$cruise         <- NA
-  ecotaxa_file$photo_id       <- NA
-  ecotaxa_file$moc            <- NA
-  ecotaxa_file$net            <- NA
-  ecotaxa_file$fraction       <- NA
-  ecotaxa_file$lab_split      <- NA
+  ecotaxa_file$cruise <- NA
+  ecotaxa_file$photo_id <- NA
+  ecotaxa_file$moc <- NA
+  ecotaxa_file$net <- NA
+  ecotaxa_file$fraction <- NA
+  ecotaxa_file$lab_split <- NA
   ecotaxa_file$split_fraction <- NA
 
   # extract components for pattern1
@@ -231,38 +343,38 @@ extract_moc_columns <- function(
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches1, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$moc <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[3]),
-    no   = ecotaxa_file$moc
+    yes = base::sapply(matches1, function(x) x[3]),
+    no = ecotaxa_file$moc
   )
   ecotaxa_file$net <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[4]),
-    no   = ecotaxa_file$net
+    yes = base::sapply(matches1, function(x) x[4]),
+    no = ecotaxa_file$net
   )
   ecotaxa_file$fraction <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[5]),
-    no   = ecotaxa_file$fraction
+    yes = base::sapply(matches1, function(x) x[5]),
+    no = ecotaxa_file$fraction
   )
   ecotaxa_file$lab_split <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[6]),
-    no   = ecotaxa_file$lab_split
+    yes = base::sapply(matches1, function(x) x[6]),
+    no = ecotaxa_file$lab_split
   )
   ecotaxa_file$split_fraction <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[7]),
-    no   = ecotaxa_file$split_fraction
+    yes = base::sapply(matches1, function(x) x[7]),
+    no = ecotaxa_file$split_fraction
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches1, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches1, function(x) x[8]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches1, function(x) x[8]),
+    no = ecotaxa_file$photo_id
   )
 
   # extract components for pattern3
@@ -273,28 +385,28 @@ extract_moc_columns <- function(
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches3, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches3, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches3, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$moc <- base::ifelse(
     test = base::sapply(matches3, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches3, function(x) x[3]),
-    no   = ecotaxa_file$moc
+    yes = base::sapply(matches3, function(x) x[3]),
+    no = ecotaxa_file$moc
   )
   ecotaxa_file$net <- base::ifelse(
     test = base::sapply(matches3, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches3, function(x) x[4]),
-    no   = ecotaxa_file$net
+    yes = base::sapply(matches3, function(x) x[4]),
+    no = ecotaxa_file$net
   )
   ecotaxa_file$fraction <- base::ifelse(
     test = base::sapply(matches3, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches3, function(x) x[5]),
-    no   = ecotaxa_file$fraction
+    yes = base::sapply(matches3, function(x) x[5]),
+    no = ecotaxa_file$fraction
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches3, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches3, function(x) x[6]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches3, function(x) x[6]),
+    no = ecotaxa_file$photo_id
   )
 
   # extract components for pattern4
@@ -305,33 +417,33 @@ extract_moc_columns <- function(
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches4, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches4, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches4, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$moc <- base::ifelse(
     test = base::sapply(matches4, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches4, function(x) x[3]),
-    no   = ecotaxa_file$moc
+    yes = base::sapply(matches4, function(x) x[3]),
+    no = ecotaxa_file$moc
   )
   ecotaxa_file$net <- base::ifelse(
     test = base::sapply(matches4, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches4, function(x) x[4]),
-    no   = ecotaxa_file$net
+    yes = base::sapply(matches4, function(x) x[4]),
+    no = ecotaxa_file$net
   )
   ecotaxa_file$fraction <- base::ifelse(
     test = base::sapply(matches4, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches4, function(x) x[5]),
-    no   = ecotaxa_file$fraction
+    yes = base::sapply(matches4, function(x) x[5]),
+    no = ecotaxa_file$fraction
   )
   ecotaxa_file$lab_split <- base::ifelse(
     test = base::sapply(matches4, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches4, function(x) x[6]),
-    no   = ecotaxa_file$lab_split
+    yes = base::sapply(matches4, function(x) x[6]),
+    no = ecotaxa_file$lab_split
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches4, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches4, function(x) x[7]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches4, function(x) x[7]),
+    no = ecotaxa_file$photo_id
   )
 
   # extract components for pattern5
@@ -342,28 +454,28 @@ extract_moc_columns <- function(
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches5, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches5, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches5, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$moc <- base::ifelse(
     test = base::sapply(matches5, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches5, function(x) x[3]),
-    no   = ecotaxa_file$moc
+    yes = base::sapply(matches5, function(x) x[3]),
+    no = ecotaxa_file$moc
   )
   ecotaxa_file$net <- base::ifelse(
     test = base::sapply(matches5, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches5, function(x) x[4]),
-    no   = ecotaxa_file$net
+    yes = base::sapply(matches5, function(x) x[4]),
+    no = ecotaxa_file$net
   )
   ecotaxa_file$fraction <- base::ifelse(
     test = base::sapply(matches5, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches5, function(x) x[5]),
-    no   = ecotaxa_file$fraction
+    yes = base::sapply(matches5, function(x) x[5]),
+    no = ecotaxa_file$fraction
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches5, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches5, function(x) x[6]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches5, function(x) x[6]),
+    no = ecotaxa_file$photo_id
   )
 
   # extract components for pattern6
@@ -374,61 +486,143 @@ extract_moc_columns <- function(
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches6, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches6, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches6, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$moc <- base::ifelse(
     test = base::sapply(matches6, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches6, function(x) x[3]),
-    no   = ecotaxa_file$moc
+    yes = base::sapply(matches6, function(x) {
+      stringr::str_extract(x[3], "[0-9]+")
+    }), # extract digits only
+    no = ecotaxa_file$moc
   )
   ecotaxa_file$net <- base::ifelse(
     test = base::sapply(matches6, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches6, function(x) x[4]),
-    no   = ecotaxa_file$net
+    yes = base::sapply(matches6, function(x) {
+      stringr::str_extract(x[4], "[0-9]+")
+    }), # extract digits only
+    no = ecotaxa_file$net
   )
   ecotaxa_file$fraction <- base::ifelse(
     test = base::sapply(matches6, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches6, function(x) x[5]),
-    no   = ecotaxa_file$fraction
+    yes = base::sapply(matches6, function(x) {
+      stringr::str_extract(x[5], "[0-9]+")
+    }), # extract digits only
+    no = ecotaxa_file$fraction
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches6, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches6, function(x) x[6]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches6, function(x) x[6]),
+    no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern7
-  matches7 <- base::regmatches(
+  # extract components for pattern8
+  matches8 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern7, ecotaxa_file$object_id)
+    base::regexec(pattern$pattern8, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
-    test = base::sapply(matches7, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches7, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    test = base::sapply(matches8, function(x) base::length(x) > 1),
+    yes = base::sapply(matches8, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$moc <- base::ifelse(
-    test = base::sapply(matches7, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches7, function(x) x[3]),
-    no   = ecotaxa_file$moc
+    test = base::sapply(matches8, function(x) base::length(x) > 1),
+    yes = base::sapply(matches8, function(x) {
+      stringr::str_extract(x[3], "[0-9]+")
+    }), # extract digits only
+    no = ecotaxa_file$moc
   )
   ecotaxa_file$net <- base::ifelse(
-    test = base::sapply(matches7, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches7, function(x) x[4]),
-    no   = ecotaxa_file$net
+    test = base::sapply(matches8, function(x) base::length(x) > 1),
+    yes = base::sapply(matches8, function(x) {
+      stringr::str_extract(x[4], "[0-9]+")
+    }), # extract digits only
+    no = ecotaxa_file$net
   )
   ecotaxa_file$fraction <- base::ifelse(
-    test = base::sapply(matches7, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches7, function(x) x[5]),
-    no   = ecotaxa_file$fraction
+    test = base::sapply(matches8, function(x) base::length(x) > 1),
+    yes = base::sapply(matches8, function(x) {
+      stringr::str_extract(x[5], "[0-9]+")
+    }), # extract digits only
+    no = ecotaxa_file$fraction
+  )
+  ecotaxa_file$lab_split <- base::ifelse(
+    test = base::sapply(matches8, function(x) base::length(x) > 1),
+    yes = base::sapply(matches8, function(x) x[6]),
+    no = ecotaxa_file$lab_split
   )
   ecotaxa_file$photo_id <- base::ifelse(
-    test = base::sapply(matches7, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches7, function(x) x[6]),
-    no   = ecotaxa_file$photo_id
+    test = base::sapply(matches8, function(x) base::length(x) > 1),
+    yes = base::sapply(matches8, function(x) x[7]),
+    no = ecotaxa_file$photo_id
   )
+
+  # extract components for pattern10 (Case 3: ae1712_m9_n8_d3_b_2_1_1251 - WITH
+  # lab_split, skip middle digit)
+  matches10 <- base::regmatches(
+    ecotaxa_file$object_id,
+    base::regexec(pattern$pattern10, ecotaxa_file$object_id)
+  )
+
+  ecotaxa_file$cruise <- base::ifelse(
+    test = base::sapply(matches10, function(x) base::length(x) > 1),
+    yes = base::sapply(matches10, function(x) x[2]), # ae1712
+    no = ecotaxa_file$cruise
+  )
+  ecotaxa_file$moc <- base::ifelse(
+    test = base::sapply(matches10, function(x) base::length(x) > 1),
+    yes = base::sapply(matches10, function(x) x[3]), # 9
+    no = ecotaxa_file$moc
+  )
+  ecotaxa_file$net <- base::ifelse(
+    test = base::sapply(matches10, function(x) base::length(x) > 1),
+    yes = base::sapply(matches10, function(x) x[4]), # 8
+    no = ecotaxa_file$net
+  )
+  ecotaxa_file$fraction <- base::ifelse(
+    test = base::sapply(matches10, function(x) base::length(x) > 1),
+    yes = base::sapply(matches10, function(x) x[5]), # 3
+    no = ecotaxa_file$fraction
+  )
+  ecotaxa_file$lab_split <- base::ifelse(
+    test = base::sapply(matches10, function(x) base::length(x) > 1),
+    yes = base::sapply(matches10, function(x) x[6]), # b (or a)
+    no = ecotaxa_file$lab_split
+  )
+  # Skip group 7 (the "2") and combine groups 8 and 9 for photo_id
+  ecotaxa_file$photo_id <- base::ifelse(
+    test = base::sapply(matches10, function(x) base::length(x) > 1),
+    yes = base::sapply(matches10, function(x) paste(x[8], x[9], sep = "_")), # 1_1251 (skips the "2")
+    no = ecotaxa_file$photo_id
+  )
+
+  # DEBUGGING
+  if (debug == TRUE) {
+    message("=== PATTERN8 EXTRACTION DEBUGGING ===")
+    pattern8_matches <- sum(sapply(matches8, function(x) length(x) > 1))
+    message("Pattern8 matches found: ", pattern8_matches)
+
+    if (pattern8_matches > 0) {
+      # Show first successful match
+      first_match_idx <- which(sapply(matches8, function(x) length(x) > 1))[1]
+      if (!is.na(first_match_idx)) {
+        match_groups <- matches8[[first_match_idx]]
+        message(sprintf(
+          "First successful match (%s):",
+          ecotaxa_file$object_id[first_match_idx]
+        ))
+        message(sprintf("  Group 1 (cruise): %s", match_groups[2]))
+        message(sprintf("  Group 2 (moc): %s", match_groups[3]))
+        message(sprintf("  Group 3 (net): %s", match_groups[4]))
+        message(sprintf("  Group 4 (fraction): %s", match_groups[5]))
+        message(sprintf("  Group 5 (lab_split): %s", match_groups[6]))
+        message(sprintf("  Group 6 (photo_id): %s", match_groups[7]))
+      }
+    }
+    message("=====================================")
+  }
 
   # add the pattern invoked for testing and debugging (optional)
 
@@ -438,7 +632,8 @@ extract_moc_columns <- function(
     pattern$pattern4,
     pattern$pattern5,
     pattern$pattern6,
-    pattern$pattern7
+    pattern$pattern8,
+    pattern$pattern10
   )
 
   pattern_names <- c(
@@ -447,7 +642,8 @@ extract_moc_columns <- function(
     "pattern4",
     "pattern5",
     "pattern6",
-    "pattern7"
+    "pattern8",
+    "pattern10"
   )
 
   # use purrr::map2() to iterate over patterns and pattern_names
@@ -472,8 +668,8 @@ extract_moc_columns <- function(
     ),
     .f = ~ ifelse(
       test = is.na(.x),
-      yes  = .y,
-      no   = .x
+      yes = .y,
+      no = .x
     )
   )
 
@@ -491,7 +687,9 @@ extract_moc_columns <- function(
       columns = c("lab_split"),
       preconditions = function(x) {
         x |>
-          dplyr::filter(pattern %in% c("pattern1", "pattern4"))
+          dplyr::filter(
+            pattern %in% c("pattern1", "pattern4", "pattern8", "pattern10")
+          )
       }
     ) |>
     pointblank::col_vals_not_null(
@@ -532,29 +730,28 @@ extract_moc_columns <- function(
 
   if (debug == TRUE) {
     print(agent)
-
-    ecotaxa_file <- ecotaxa_file |>
-      dplyr::select(dplyr::any_of(moc_cols))
-  } else {
-    # remove any parsed columns that are empty
-    ecotaxa_file <- ecotaxa_file |>
-      dplyr::select(
-        -dplyr::any_of(moc_cols[sapply(
-          ecotaxa_file[moc_cols],
-          function(x) all(is.na(x))
-        )])
-      ) |>
-      dplyr::select(-pattern) # remove pattern column
   }
+
+  # remove any parsed columns that are empty
+  ecotaxa_file <- ecotaxa_file |>
+    dplyr::select(
+      -dplyr::any_of(moc_cols[sapply(
+        ecotaxa_file[moc_cols],
+        function(x) all(is.na(x))
+      )])
+    ) |>
+    dplyr::select(-pattern) |> # remove pattern column
+    dplyr::select(dplyr::any_of(moc_cols), dplyr::everything()) # MOC columns first, then everything else
 
   return(ecotaxa_file)
 
 }
 
+
 #' @title Parse the cruise ID column of an EcoTaxa file of type FlowCam.
 #'
 #' @description Parses the `cruise_id` column of an EcoTaxa file of
-#' type FlowCam. 
+#' type FlowCam.
 #'
 #' @param ecotaxa_file (character) The unquoted name of a tibble or data frame
 #' in the R environment that reflecte the data in the EcoTaxa file.
@@ -575,7 +772,7 @@ extract_moc_columns <- function(
 extract_flowcam_columns <- function(
   ecotaxa_file,
   pattern = flowcam_patterns,
-  debug = FALSE
+  debug   = FALSE
 ) {
 
   ecotaxa_file$cruise             <- NA
@@ -750,14 +947,11 @@ extract_flowcam_columns <- function(
   )
 
   if (debug == TRUE) {
-
     print(agent)
 
     ecotaxa_file <- ecotaxa_file |>
       dplyr::select(dplyr::any_of(flowcam_cols))
-
   } else {
-
     ecotaxa_file <- ecotaxa_file |>
       # remove any parsed columns that are empty
       dplyr::select(
@@ -770,11 +964,9 @@ extract_flowcam_columns <- function(
       ) |>
       # remove pattern column
       dplyr::select(-pattern)
-
   }
 
   return(ecotaxa_file)
-
 }
 
 #' @title Parse the cruise ID column of an EcoTaxa file of type UVP
@@ -801,7 +993,7 @@ extract_flowcam_columns <- function(
 extract_uvp_columns <- function(
   ecotaxa_file,
   pattern = uvp_patterns,
-  debug = FALSE
+  debug   = FALSE
 ) {
 
   ecotaxa_file$year          <- NA
