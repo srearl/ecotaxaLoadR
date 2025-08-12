@@ -1,2 +1,3 @@
 ^vignettes/\.quarto$
 ^vignettes/*_files$
+^data-raw$
