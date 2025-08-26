@@ -4,7 +4,7 @@
 #' EcoTaxa file of type MOC, UVP, or FlowCam.
 #'
 #' @param ecotaxa_file (character) The unquoted name of a tibble or data frame
-#' in the R environment that reflecte the data in the EcoTaxa file.
+#' in the R environment that reflects the data in the EcoTaxa file.
 #' @param debug A logical value indicating whether to enable debug mode.
 #' Defaults to `FALSE`.
 #'
@@ -19,6 +19,7 @@ parse_cruise_id <- function(
   ecotaxa_file,
   debug = FALSE
 ) {
+
   # test for data collection type from a subsample of the data
   set.seed(123)
   sample_size <- min(1000, nrow(ecotaxa_file))
@@ -32,25 +33,44 @@ parse_cruise_id <- function(
   moc_pattern_true     <- FALSE
   uvp_pattern_true     <- FALSE
 
-  # FLOWCAM
+  # get patterns from the definitions table
+  moc_patterns <- ecotaxaLoadR::pattern_definitions[
+    pattern_definitions$type == "moc",
+  ]
+  flowcam_patterns <- ecotaxaLoadR::pattern_definitions[
+    pattern_definitions$type == "flowcam",
+  ]
+  uvp_patterns <- ecotaxaLoadR::pattern_definitions[
+    pattern_definitions$type == "uvp",
+  ]
 
-  flowcam_pattern <- "^([0-9]{5})_([0-9]{4})_([0-9]{2})_([0-9]{1})_([0-9]+[a-zA-Z]+)_([a-zA-Z])_([0-9]+)$"
-  # flowcam_pattern: "10414_0000_01_1_20x_d_00080"
+  # create individual pattern variables using type + iteration naming
 
-  flowcam_pattern2 <- "^([0-9]{5})_([0-9]{4})_([0-9]{2})_([0-9]{1})_([0-9]+[a-zA-Z]+)_([0-9]+_[a-zA-Z])_([0-9]+)$"
-  # flowcam_pattern2:  "10423_0800_22_1_20x_2_d_00116"
+  moc1  <- moc_patterns[moc_patterns$iteration == 1, "regex"][[1]]
+  moc3  <- moc_patterns[moc_patterns$iteration == 3, "regex"][[1]]
+  moc4  <- moc_patterns[moc_patterns$iteration == 4, "regex"][[1]]
+  moc5  <- moc_patterns[moc_patterns$iteration == 5, "regex"][[1]]
+  moc6  <- moc_patterns[moc_patterns$iteration == 6, "regex"][[1]]
+  moc8  <- moc_patterns[moc_patterns$iteration == 8, "regex"][[1]]
+  moc10 <- moc_patterns[moc_patterns$iteration == 10, "regex"][[1]]
 
-  # check if rows in subsample match flowcam_patterns
+  flowcam1 <- flowcam_patterns[flowcam_patterns$iteration == 1, "regex"][[1]]
+  flowcam2 <- flowcam_patterns[flowcam_patterns$iteration == 2, "regex"][[1]]
+
+  uvp1 <- uvp_patterns[uvp_patterns$iteration == 1, "regex"][[1]]
+
+  # test for FLOWCAM
+
   matches_flowcam_pattern <- base::regmatches(
     subsample$object_id,
-    base::regexec(flowcam_pattern, subsample$object_id)
+    base::regexec(flowcam1, subsample$object_id)
   )
   matches_flowcam_pattern2 <- base::regmatches(
     subsample$object_id,
-    base::regexec(flowcam_pattern2, subsample$object_id)
+    base::regexec(flowcam2, subsample$object_id)
   )
 
-  flowcam_pattern_true <- all(
+  flowcam_pattern_true <- any(
     sapply(matches_flowcam_pattern, function(x) length(x) > 1) |
       sapply(matches_flowcam_pattern2, function(x) length(x) > 1)
   )
@@ -58,64 +78,52 @@ parse_cruise_id <- function(
   if (flowcam_pattern_true == TRUE) {
     message("flowcam pattern matched")
 
-    flowcam_patterns <- list(
-      flowcam_pattern  = flowcam_pattern,
-      flowcam_pattern2 = flowcam_pattern2
+    flowcam_patterns_list <- list(
+      flowcam1 = flowcam1,
+      flowcam2 = flowcam2
     )
 
     extracted_file <- extract_flowcam_columns(
-      ecotaxa_file = ecotaxa_file,
-      pattern      = flowcam_patterns,
-      debug        = debug
+      ecotaxa_file     = ecotaxa_file,
+      flowcam_patterns = flowcam_patterns_list,
+      debug            = debug
     )
 
-    return(
-      list(
-        parsed_file = extracted_file,
-        pattern = "flowcam"
-      )
-    )
+    return(list(
+      parsed_file = extracted_file,
+      pattern     = "flowcam"
+    ))
   }
 
-  # MOC
-
-  pattern1 <- "^([0-9]{2})([0-9]{2})([0-9]{2})_([0-9]{4})_([0-9]+_[0-9]+)_([a-zA-Z0-9]+_[a-zA-Z0-9]+)_([0-9]+_[0-9]+)$"
-  # pattern2 <- "^([a-zA-Z0-9]+)_([a-zA-Z0-9]+)_([a-zA-Z0-9]+)_([0-9]+)_([0-9]+_[0-9]+)$"
-  pattern3 <- "^([0-9]{2})([0-9]{2})([0-9]{2})_([0-9]+)_([0-9]+)$"
-  pattern4 <- "^([0-9]{2})([0-9]{2})([0-9]{2})_([0-9]{4})_([0-9]{1}_[0-9]+)_([0-9]{1}_[0-9]+)$"
-  pattern5 <- "^([0-9]{2})([0-9]{2})([0-9]{2})_([0-9]{4})_([0-9]+_[0-9]+)$"
-  pattern6 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z0-9]+)_([0-9]+_[0-9]+)$"
-  # pattern7 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_[a-zA-Z]_([0-9]+_[0-9]+)$"
-  pattern8 <- "^([a-zA-Z]+[0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z][0-9]+)_([a-zA-Z])_([0-9]+_[0-9]+)$"
-  pattern10 <- "^([a-zA-Z]+[0-9]+)_m([0-9]+)_n([0-9]+)_d([0-9]+)_([ab])_([0-9]+)_([0-9]+)_([0-9]+)$" # Case 3: 8 parts, with lab_split (a or b)
+  # test for MOC
 
   matches1 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern1, ecotaxa_file$object_id)
+    base::regexec(moc1, ecotaxa_file$object_id)
   )
   matches3 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern3, ecotaxa_file$object_id)
+    base::regexec(moc3, ecotaxa_file$object_id)
   )
   matches4 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern4, ecotaxa_file$object_id)
+    base::regexec(moc4, ecotaxa_file$object_id)
   )
   matches5 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern5, ecotaxa_file$object_id)
+    base::regexec(moc5, ecotaxa_file$object_id)
   )
   matches6 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern6, ecotaxa_file$object_id)
+    base::regexec(moc6, ecotaxa_file$object_id)
   )
   matches8 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern8, ecotaxa_file$object_id)
+    base::regexec(moc8, ecotaxa_file$object_id)
   )
   matches10 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern10, ecotaxa_file$object_id)
+    base::regexec(moc10, ecotaxa_file$object_id)
   )
 
   moc_pattern_true <- any(
@@ -136,14 +144,15 @@ parse_cruise_id <- function(
       paste(head(ecotaxa_file$object_id, 3), collapse = ", ")
     )
 
+    # Update to use new pattern structure
     pattern_results <- list(
-      pattern1  = sum(sapply(matches1, function(x) length(x) > 1)),
-      pattern3  = sum(sapply(matches3, function(x) length(x) > 1)),
-      pattern4  = sum(sapply(matches4, function(x) length(x) > 1)),
-      pattern5  = sum(sapply(matches5, function(x) length(x) > 1)),
-      pattern6  = sum(sapply(matches6, function(x) length(x) > 1)),
-      pattern8  = sum(sapply(matches8, function(x) length(x) > 1)),
-      pattern10 = sum(sapply(matches10, function(x) length(x) > 1))
+      moc1  = sum(sapply(matches1, function(x) length(x) > 1)),
+      moc3  = sum(sapply(matches3, function(x) length(x) > 1)),
+      moc4  = sum(sapply(matches4, function(x) length(x) > 1)),
+      moc5  = sum(sapply(matches5, function(x) length(x) > 1)),
+      moc6  = sum(sapply(matches6, function(x) length(x) > 1)),
+      moc8  = sum(sapply(matches8, function(x) length(x) > 1)),
+      moc10 = sum(sapply(matches10, function(x) length(x) > 1))
     )
 
     for (i in 1:length(pattern_results)) {
@@ -154,11 +163,11 @@ parse_cruise_id <- function(
       ))
     }
 
-    # Test pattern8 specifically on first few object_ids
+    # Test moc8 specifically on first few object_ids
     test_ids <- head(ecotaxa_file$object_id, 5)
-    message("\nPattern8 testing on first 5 object_ids:")
+    message("\nMOC8 testing on first 5 object_ids:")
     for (id in test_ids) {
-      match_result <- regmatches(id, regexec(pattern8, id))
+      match_result <- regmatches(id, regexec(moc8, id))
       if (length(match_result[[1]]) > 1) {
         message(sprintf(
           "✓ %s -> %s",
@@ -173,7 +182,7 @@ parse_cruise_id <- function(
     message("===============================")
   }
 
-  # DEBGUGGING
+  # DEBUGGING
   if (debug == TRUE) {
     message("=== DETAILED UNMATCHED PATTERN ANALYSIS ===")
 
@@ -233,71 +242,66 @@ parse_cruise_id <- function(
   if (moc_pattern_true == TRUE) {
     message("MOC pattern matched")
 
-    moc_patterns <- list(
-      pattern1  = pattern1,
-      pattern3  = pattern3,
-      pattern4  = pattern4,
-      pattern5  = pattern5,
-      pattern6  = pattern6,
-      pattern8  = pattern8,
-      pattern10 = pattern10
+    moc_patterns_list <- list(
+      moc1  = moc1,
+      moc3  = moc3,
+      moc4  = moc4,
+      moc5  = moc5,
+      moc6  = moc6,
+      moc8  = moc8,
+      moc10 = moc10
     )
 
     extracted_file <- extract_moc_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern      = moc_patterns,
+      moc_patterns = moc_patterns_list,
       debug        = debug
     )
 
-    return(
-      list(
-        parsed_file = extracted_file,
-        pattern     = "moc"
-      )
-    )
+    return(list(
+      parsed_file = extracted_file,
+      pattern     = "moc"
+    ))
   }
 
-  # UVP
+  # test for UVP
 
-  uvp_pattern <- "^([0-9]{4})([0-9]{2})([0-9]{2})-([0-9]{2})([0-9]{2})([0-9]{2})-([0-9]{3})_([0-9]+)$"
-
-  # check if rows in subsample match uvp_pattern
   matches_uvp_pattern <- base::regmatches(
     subsample$object_id,
-    base::regexec(uvp_pattern, subsample$object_id)
+    base::regexec(uvp1, subsample$object_id)
   )
 
-  uvp_pattern_true <- all(
+  uvp_pattern_true <- any(
     sapply(matches_uvp_pattern, function(x) length(x) > 1)
   )
 
   if (uvp_pattern_true == TRUE) {
     message("uvp pattern matched")
 
-    uvp_patterns <- list(
-      uvp_patterns = uvp_pattern
+    uvp_patterns_list <- list(
+      uvp1 = uvp1
     )
 
     extracted_file <- extract_uvp_columns(
       ecotaxa_file = ecotaxa_file,
-      pattern      = uvp_patterns,
-      debug        = debug
+      uvp_patterns = uvp_patterns_list,
+      debug = debug
     )
 
-    return(
-      list(
-        parsed_file = extracted_file,
-        pattern     = "uvp"
-      )
-    )
+    return(list(
+      parsed_file = extracted_file,
+      pattern = "uvp"
+    ))
   }
+
+  # UNMATCHED
 
   if (
     !flowcam_pattern_true &&
       !moc_pattern_true &&
       !uvp_pattern_true
   ) {
-    message("could match the object_id to any patterns")
+    message("could match the object_id to any documented patterns")
     return(NULL)
   }
 }
@@ -307,8 +311,8 @@ parse_cruise_id <- function(
 #' @description Parses the `cruise_id` column of an EcoTaxa file of type MOC.
 #'
 #' @param ecotaxa_file (character) The unquoted name of a tibble or data frame
-#' in the R environment that reflecte the data in the EcoTaxa file.
-#' @param pattern (list) A list of MOC patterns to match.
+#' in the R environment that reflects the data in the EcoTaxa file.
+#' @param moc_patterns (list) A list of MOC patterns to match.
 #' @param debug (logical) A logical value indicating whether to enable debug
 #' mode. Defaults to `FALSE`.
 #'
@@ -324,21 +328,30 @@ parse_cruise_id <- function(
 #'
 extract_moc_columns <- function(
   ecotaxa_file,
-  pattern = moc_patterns,
+  moc_patterns,
   debug = FALSE
 ) {
-  ecotaxa_file$cruise <- NA
-  ecotaxa_file$photo_id <- NA
-  ecotaxa_file$moc <- NA
-  ecotaxa_file$net <- NA
-  ecotaxa_file$fraction <- NA
-  ecotaxa_file$lab_split <- NA
+
+  moc1  <- moc_patterns$moc1
+  moc3  <- moc_patterns$moc3
+  moc4  <- moc_patterns$moc4
+  moc5  <- moc_patterns$moc5
+  moc6  <- moc_patterns$moc6
+  moc8  <- moc_patterns$moc8
+  moc10 <- moc_patterns$moc10
+
+  ecotaxa_file$cruise         <- NA
+  ecotaxa_file$photo_id       <- NA
+  ecotaxa_file$moc            <- NA
+  ecotaxa_file$net            <- NA
+  ecotaxa_file$fraction       <- NA
+  ecotaxa_file$lab_split      <- NA
   ecotaxa_file$split_fraction <- NA
 
-  # extract components for pattern1
+  # extract components for moc1
   matches1 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern1, ecotaxa_file$object_id)
+    base::regexec(moc1, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -377,10 +390,10 @@ extract_moc_columns <- function(
     no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern3
+  # extract components for moc3
   matches3 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern3, ecotaxa_file$object_id)
+    base::regexec(moc3, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -409,10 +422,10 @@ extract_moc_columns <- function(
     no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern4
+  # extract components for moc4
   matches4 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern4, ecotaxa_file$object_id)
+    base::regexec(moc4, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -446,10 +459,10 @@ extract_moc_columns <- function(
     no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern5
+  # extract components for moc5
   matches5 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern5, ecotaxa_file$object_id)
+    base::regexec(moc5, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -478,10 +491,10 @@ extract_moc_columns <- function(
     no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern6
+  # extract components for moc6
   matches6 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern6, ecotaxa_file$object_id)
+    base::regexec(moc6, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -516,10 +529,10 @@ extract_moc_columns <- function(
     no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern8
+  # extract components for moc8
   matches8 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern8, ecotaxa_file$object_id)
+    base::regexec(moc8, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -559,11 +572,11 @@ extract_moc_columns <- function(
     no = ecotaxa_file$photo_id
   )
 
-  # extract components for pattern10 (Case 3: ae1712_m9_n8_d3_b_2_1_1251 - WITH
+  # extract components for moc10 (Case 3: ae1712_m9_n8_d3_b_2_1_1251 - WITH
   # lab_split, skip middle digit)
   matches10 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$pattern10, ecotaxa_file$object_id)
+    base::regexec(moc10, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
@@ -600,7 +613,7 @@ extract_moc_columns <- function(
 
   # DEBUGGING
   if (debug == TRUE) {
-    message("=== PATTERN8 EXTRACTION DEBUGGING ===")
+    message("=== MOC8 EXTRACTION DEBUGGING ===")
     pattern8_matches <- sum(sapply(matches8, function(x) length(x) > 1))
     message("Pattern8 matches found: ", pattern8_matches)
 
@@ -626,25 +639,8 @@ extract_moc_columns <- function(
 
   # add the pattern invoked for testing and debugging (optional)
 
-  patterns <- list(
-    pattern$pattern1,
-    pattern$pattern3,
-    pattern$pattern4,
-    pattern$pattern5,
-    pattern$pattern6,
-    pattern$pattern8,
-    pattern$pattern10
-  )
-
-  pattern_names <- c(
-    "pattern1",
-    "pattern3",
-    "pattern4",
-    "pattern5",
-    "pattern6",
-    "pattern8",
-    "pattern10"
-  )
+  patterns      <- list(moc1, moc3, moc4, moc5, moc6, moc8, moc10)
+  pattern_names <- paste0("moc", moc_patterns$iteration)
 
   # use purrr::map2() to iterate over patterns and pattern_names
   ecotaxa_file$pattern <- NA
@@ -688,7 +684,7 @@ extract_moc_columns <- function(
       preconditions = function(x) {
         x |>
           dplyr::filter(
-            pattern %in% c("pattern1", "pattern4", "pattern8", "pattern10")
+            pattern %in% c("moc8", "moc10")
           )
       }
     ) |>
@@ -696,7 +692,7 @@ extract_moc_columns <- function(
       columns = c("split_fraction"),
       preconditions = function(x) {
         x |>
-          dplyr::filter(pattern %in% c("pattern1"))
+          dplyr::filter(pattern %in% c("moc1"))
       }
     ) |>
     pointblank::interrogate()
@@ -744,7 +740,6 @@ extract_moc_columns <- function(
     dplyr::select(dplyr::any_of(moc_cols), dplyr::everything()) # MOC columns first, then everything else
 
   return(ecotaxa_file)
-
 }
 
 
@@ -754,8 +749,8 @@ extract_moc_columns <- function(
 #' type FlowCam.
 #'
 #' @param ecotaxa_file (character) The unquoted name of a tibble or data frame
-#' in the R environment that reflecte the data in the EcoTaxa file.
-#' @param pattern (list) A list of FlowCam patterns to match.
+#' in the R environment that reflects the data in the EcoTaxa file.
+#' @param flowcam_patterns (list) A list of FlowCam patterns to match.
 #' @param debug (logical) A logical value indicating whether to enable debug
 #' mode. Defaults to `FALSE`.
 #'
@@ -771,9 +766,11 @@ extract_moc_columns <- function(
 #'
 extract_flowcam_columns <- function(
   ecotaxa_file,
-  pattern = flowcam_patterns,
-  debug   = FALSE
+  flowcam_patterns,
+  debug = FALSE
 ) {
+  flowcam1 <- flowcam_patterns$flowcam1
+  flowcam2 <- flowcam_patterns$flowcam2
 
   ecotaxa_file$cruise             <- NA
   ecotaxa_file$photo_id           <- NA
@@ -786,95 +783,95 @@ extract_flowcam_columns <- function(
   # extract components for flowcam_pattern
   matches_flowcam <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$flowcam_pattern, ecotaxa_file$object_id)
+    base::regexec(flowcam1, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches_flowcam, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$depth <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[3]),
-    no   = ecotaxa_file$depth
+    yes = base::sapply(matches_flowcam, function(x) x[3]),
+    no = ecotaxa_file$depth
   )
   ecotaxa_file$niskin <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[4]),
-    no   = ecotaxa_file$niskin
+    yes = base::sapply(matches_flowcam, function(x) x[4]),
+    no = ecotaxa_file$niskin
   )
   ecotaxa_file$mode <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[5]),
-    no   = ecotaxa_file$mode
+    yes = base::sapply(matches_flowcam, function(x) x[5]),
+    no = ecotaxa_file$mode
   )
   ecotaxa_file$magnification <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[6]),
-    no   = ecotaxa_file$magnification
+    yes = base::sapply(matches_flowcam, function(x) x[6]),
+    no = ecotaxa_file$magnification
   )
   ecotaxa_file$duplicates_removed <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[7]),
-    no   = ecotaxa_file$duplicates_removed
+    yes = base::sapply(matches_flowcam, function(x) x[7]),
+    no = ecotaxa_file$duplicates_removed
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches_flowcam, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam, function(x) x[8]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches_flowcam, function(x) x[8]),
+    no = ecotaxa_file$photo_id
   )
 
   # extract components for flowcam_pattern2
   matches_flowcam2 <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$flowcam_pattern2, ecotaxa_file$object_id)
+    base::regexec(flowcam2, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$cruise <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[2]),
-    no   = ecotaxa_file$cruise
+    yes = base::sapply(matches_flowcam2, function(x) x[2]),
+    no = ecotaxa_file$cruise
   )
   ecotaxa_file$depth <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[3]),
-    no   = ecotaxa_file$depth
+    yes = base::sapply(matches_flowcam2, function(x) x[3]),
+    no = ecotaxa_file$depth
   )
   ecotaxa_file$niskin <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[4]),
-    no   = ecotaxa_file$niskin
+    yes = base::sapply(matches_flowcam2, function(x) x[4]),
+    no = ecotaxa_file$niskin
   )
   ecotaxa_file$mode <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[5]),
-    no   = ecotaxa_file$mode
+    yes = base::sapply(matches_flowcam2, function(x) x[5]),
+    no = ecotaxa_file$mode
   )
   ecotaxa_file$magnification <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[6]),
-    no   = ecotaxa_file$magnification
+    yes = base::sapply(matches_flowcam2, function(x) x[6]),
+    no = ecotaxa_file$magnification
   )
   ecotaxa_file$duplicates_removed <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[7]),
-    no   = ecotaxa_file$duplicates_removed
+    yes = base::sapply(matches_flowcam2, function(x) x[7]),
+    no = ecotaxa_file$duplicates_removed
   )
   ecotaxa_file$photo_id <- base::ifelse(
     test = base::sapply(matches_flowcam2, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_flowcam2, function(x) x[8]),
-    no   = ecotaxa_file$photo_id
+    yes = base::sapply(matches_flowcam2, function(x) x[8]),
+    no = ecotaxa_file$photo_id
   )
 
   patterns <- list(
-    pattern$flowcam_pattern,
-    pattern$flowcam_pattern2
+    flowcam1,
+    flowcam2
   )
 
   pattern_names <- c(
-    "flowcam_pattern",
-    "flowcam_pattern2"
+    "flowcam1",
+    "flowcam2"
   )
 
   # iterate over patterns and pattern_names
@@ -899,8 +896,8 @@ extract_flowcam_columns <- function(
     ),
     .f = ~ ifelse(
       test = is.na(.x),
-      yes  = .y,
-      no   = .x
+      yes = .y,
+      no = .x
     )
   )
 
@@ -969,14 +966,15 @@ extract_flowcam_columns <- function(
   return(ecotaxa_file)
 }
 
+
 #' @title Parse the cruise ID column of an EcoTaxa file of type UVP
 #'
 #' @description Parses the `cruise_id` column of an EcoTaxa file of
 #' type UVP.
 #'
 #' @param ecotaxa_file (character) The unquoted name of a tibble or data frame
-#' in the R environment that reflecte the data in the EcoTaxa file.
-#' @param pattern (list) A list of UVP patterns to match.
+#' in the R environment that reflects the data in the EcoTaxa file.
+#' @param uvp_patterns (list) A list of UVP patterns to match.
 #' @param debug (logical) A logical value indicating whether to enable debug
 #' mode. Defaults to `FALSE`.
 #'
@@ -992,9 +990,11 @@ extract_flowcam_columns <- function(
 #'
 extract_uvp_columns <- function(
   ecotaxa_file,
-  pattern = uvp_patterns,
-  debug   = FALSE
+  uvp_patterns,
+  debug = FALSE
 ) {
+
+  uvp1 <- uvp_patterns$uvp1
 
   ecotaxa_file$year          <- NA
   ecotaxa_file$month         <- NA
@@ -1008,57 +1008,52 @@ extract_uvp_columns <- function(
   # extract components for flowcam_pattern
   matches_uvp <- base::regmatches(
     ecotaxa_file$object_id,
-    base::regexec(pattern$uvp_pattern, ecotaxa_file$object_id)
+    base::regexec(uvp1, ecotaxa_file$object_id)
   )
 
   ecotaxa_file$year <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[2]),
-    no   = ecotaxa_file$year
+    yes = base::sapply(matches_uvp, function(x) x[2]),
+    no = ecotaxa_file$year
   )
   ecotaxa_file$month <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[3]),
-    no   = ecotaxa_file$month
+    yes = base::sapply(matches_uvp, function(x) x[3]),
+    no = ecotaxa_file$month
   )
   ecotaxa_file$day <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[4]),
-    no   = ecotaxa_file$day
+    yes = base::sapply(matches_uvp, function(x) x[4]),
+    no = ecotaxa_file$day
   )
   ecotaxa_file$hour <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[5]),
-    no   = ecotaxa_file$hour
+    yes = base::sapply(matches_uvp, function(x) x[5]),
+    no = ecotaxa_file$hour
   )
   ecotaxa_file$minute <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[6]),
-    no   = ecotaxa_file$minute
+    yes = base::sapply(matches_uvp, function(x) x[6]),
+    no = ecotaxa_file$minute
   )
   ecotaxa_file$second <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[7]),
-    no   = ecotaxa_file$second
+    yes = base::sapply(matches_uvp, function(x) x[7]),
+    no = ecotaxa_file$second
   )
   ecotaxa_file$millisecond <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[8]),
-    no   = ecotaxa_file$millisecond
+    yes = base::sapply(matches_uvp, function(x) x[8]),
+    no = ecotaxa_file$millisecond
   )
   ecotaxa_file$object_number <- base::ifelse(
     test = base::sapply(matches_uvp, function(x) base::length(x) > 1),
-    yes  = base::sapply(matches_uvp, function(x) x[9]),
-    no   = ecotaxa_file$object_number
+    yes = base::sapply(matches_uvp, function(x) x[9]),
+    no = ecotaxa_file$object_number
   )
 
-  patterns <- list(
-    pattern$uvp_pattern
-  )
-
-  pattern_names <- c(
-    "uvp_pattern"
-  )
+  patterns <- list(uvp1)
+  pattern_names <- c("uvp1")
 
   # iterate over patterns and pattern_names
   ecotaxa_file$pattern <- NA
@@ -1082,8 +1077,8 @@ extract_uvp_columns <- function(
     ),
     .f = ~ ifelse(
       test = is.na(.x),
-      yes  = .y,
-      no   = .x
+      yes = .y,
+      no = .x
     )
   )
 
@@ -1135,9 +1130,7 @@ extract_uvp_columns <- function(
 
     ecotaxa_file <- ecotaxa_file |>
       dplyr::select(dplyr::any_of(uvp_cols))
-
   } else {
-
     ecotaxa_file <- ecotaxa_file |>
       # remove any parsed columns that are empty
       dplyr::select(
@@ -1147,9 +1140,7 @@ extract_uvp_columns <- function(
       ) |>
       # remove pattern column
       dplyr::select(-pattern)
-
   }
 
   return(ecotaxa_file)
-
 }
