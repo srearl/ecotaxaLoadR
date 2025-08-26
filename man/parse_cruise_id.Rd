@@ -8,7 +8,7 @@ parse_cruise_id(ecotaxa_file, debug = FALSE)
 }
 \arguments{
 \item{ecotaxa_file}{(character) The unquoted name of a tibble or data frame
-in the R environment that reflecte the data in the EcoTaxa file.}
+in the R environment that reflects the data in the EcoTaxa file.}
 
 \item{debug}{A logical value indicating whether to enable debug mode.
 Defaults to \code{FALSE}.}

@@ -4,13 +4,13 @@
 \alias{extract_uvp_columns}
 \title{Parse the cruise ID column of an EcoTaxa file of type UVP}
 \usage{
-extract_uvp_columns(ecotaxa_file, pattern = uvp_patterns, debug = FALSE)
+extract_uvp_columns(ecotaxa_file, uvp_patterns, debug = FALSE)
 }
 \arguments{
 \item{ecotaxa_file}{(character) The unquoted name of a tibble or data frame
-in the R environment that reflecte the data in the EcoTaxa file.}
+in the R environment that reflects the data in the EcoTaxa file.}
 
-\item{pattern}{(list) A list of UVP patterns to match.}
+\item{uvp_patterns}{(list) A list of UVP patterns to match.}
 
 \item{debug}{(logical) A logical value indicating whether to enable debug
 mode. Defaults to \code{FALSE}.}

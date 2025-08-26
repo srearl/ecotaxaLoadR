@@ -4,17 +4,13 @@
 \alias{extract_flowcam_columns}
 \title{Parse the cruise ID column of an EcoTaxa file of type FlowCam.}
 \usage{
-extract_flowcam_columns(
-  ecotaxa_file,
-  pattern = flowcam_patterns,
-  debug = FALSE
-)
+extract_flowcam_columns(ecotaxa_file, flowcam_patterns, debug = FALSE)
 }
 \arguments{
 \item{ecotaxa_file}{(character) The unquoted name of a tibble or data frame
-in the R environment that reflecte the data in the EcoTaxa file.}
+in the R environment that reflects the data in the EcoTaxa file.}
 
-\item{pattern}{(list) A list of FlowCam patterns to match.}
+\item{flowcam_patterns}{(list) A list of FlowCam patterns to match.}
 
 \item{debug}{(logical) A logical value indicating whether to enable debug
 mode. Defaults to \code{FALSE}.}

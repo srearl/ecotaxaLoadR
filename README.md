@@ -2,55 +2,86 @@
 
 **Minimally process and format EcoTaxa resources for marine ecological analyses**
 
-[![R-CMD-check](https://github.com/srearl/ecotaxaLoadR/workflows/R-CMD-check/badge.svg)](https://github.com/srearl/ecotaxaLoadR/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Overview
 
-`ecotaxaLoadR` is an R package designed to streamline the processing and analysis of marine plankton data from multiple sources. It provides comprehensive tools for handling EcoTaxa datasets, MOCNESS PRO files, and Particle Image Data (PID) files, with a focus on data validation, temporal annotations, and standardized formatting for downstream ecological analyses.
-
-## Key Features
-
-### 🌊 **EcoTaxa Data Processing**
-- Load and validate EcoTaxa TSV files with comprehensive error handling
-- Parse cruise identifiers and extract metadata automatically
-- Convert measurements to standardized units (area, length, volume)
-- Calculate ecological metrics (density, abundance, biomass proxies)
-- Data quality validation with detailed reporting
-
-### 🎣 **MOCNESS PRO File Processing**
-- Batch process multiple PRO files from MOCNESS deployments
-- Extract comprehensive metadata (tow information, instrument calibrations)
-- **Enhanced parsing for diverse tow line formats** (handles both "MOC" and "M" prefixes, various vessel name formats)
-- Convert decimal day-of-year timestamps to proper datetime objects
-- Automatic timezone detection based on geographic coordinates
-- **Optional day/night annotation** for temporal ecological analyses
-- Depth, temperature, and position data integration
-
-### 🔬 **Particle Image Data (PID) Analysis**
-- Parse PID files from zooplankton imaging systems
-- **Intelligent SampleId parsing** (automatic extraction of cruise, MOC, and net information)
-- **Date format standardization** (converts various date formats to ISO standard)
-- Extract image metadata and measurement attributes
-- Convert wide-format data to analysis-ready long format
-- Batch processing with error handling and progress reporting
-
-### ⏰ **Temporal Analysis Tools**
-- Day/night classification based on solar position calculations
-- Timezone-aware datetime conversions
-- Temporal data validation and consistency checks
+ecotaxaLoadR is an R package designed to streamline the processing and formatting of EcoTaxa data exports for marine ecological analyses. The package provides tools to load, parse, and standardize data from multiple marine imaging instruments including MOCNESS (MOC), FlowCam, and Underwater Vision Profiler (UVP).
 
 ## Installation
 
 Install the development version from GitHub:
 
 ```r
-# Install devtools if you haven't already
-install.packages("devtools")
-
-# Install ecotaxaLoadR
+# install.packages("devtools")
 devtools::install_github("srearl/ecotaxaLoadR")
 ```
+
+## Data Formats Supported
+
+### EcoTaxa Exports
+- **TSV files**: Tab-separated EcoTaxa export files
+- **Object ID parsing**: Automatic extraction of cruise, deployment, and sampling metadata
+- **Multi-instrument support**: MOC, FlowCam, and UVP data formats
+- **Validation**: Built-in data quality checks and validation
+
+### MOCNESS Files
+- **PRO files**: MOCNESS profile data with environmental parameters
+- **PID files**: MOCNESS deployment metadata and sampling information
+- **Flexible parsing**: Handles various filename formats and cruise conventions
+
+### Pattern Definitions
+- **Centralized pattern storage**: CSV file in `inst/extdata/pattern_definitions.csv`
+- **Metadata included**: Pattern examples, lab_split indicators, dataset associations
+- **Version controlled**: Patterns tracked in package source code
+- **Extensible**: Add new patterns by editing CSV and rebuilding package data
+
+## Pattern Recognition System
+
+### Flexible Object ID Parsing
+- **Centralized pattern definitions**: All regex patterns stored in `pattern_definitions` dataset
+- **Multiple instrument support**: MOC, FlowCam, and UVP pattern recognition
+- **Dynamic pattern matching**: Automatically detects appropriate parsing approach
+- **Lab split detection**: Identifies samples with a/b laboratory splits
+- **Extensible architecture**: Easy to add new patterns without code changes
+
+The package uses a sophisticated pattern recognition system to parse EcoTaxa `object_id` strings:
+
+```r
+# View available patterns
+data("pattern_definitions")
+head(ecotaxaLoadR::pattern_definitions)
+
+# Patterns automatically applied during data loading
+eco_data <- ecotaxaLoadR::load_eco_taxa("data.tsv")
+```
+
+### Supported Object ID Formats
+
+#### MOC Patterns
+- example: `120815_1830_1_5_a_1_12345`
+- example: `sr2407_m2_n1_d1_1_1` 
+- example: `ae2112_m22_n1_d2_a_1_1`
+
+#### FlowCam Patterns  
+- example: `10414_0000_01_1_20x_d_00080`
+- example: `10423_0800_22_1_20x_2_d_00116`
+
+#### UVP Patterns
+- example: `20120815-183045-123_00001`
+
+## Key Functions
+
+| Function | Purpose | New Features |
+|----------|---------|--------------|
+| `ecotaxaLoadR::load_eco_taxa()` | Load and process EcoTaxa TSV files | **Pattern-based object_id parsing** |
+| `ecotaxaLoadR::parse_cruise_id()` | Parse object_id strings using pattern definitions | **Refactored with centralized patterns** |
+| `ecotaxaLoadR::load_pro_files()` | Batch process MOCNESS PRO files | **Added `daynight` parameter** |
+| `ecotaxaLoadR::ingest_pro_file()` | Process individual PRO files | **Enhanced filename parsing, daynight support** |
+| `ecotaxaLoadR::load_pid_files()` | Batch process PID files | **Automatic SampleId parsing** |
+| `ecotaxaLoadR::annotate_daytime()` | Add day/night classification | |
+| `pattern_definitions` | Dataset containing all parsing patterns | **New centralized pattern system** |
 
 ## Quick Start
 
@@ -59,175 +90,130 @@ devtools::install_github("srearl/ecotaxaLoadR")
 ```r
 library(ecotaxaLoadR)
 
-# Load EcoTaxa data with day/night annotation
+# Load an EcoTaxa TSV file
 eco_data <- ecotaxaLoadR::load_eco_taxa(
   file_path = "path/to/ecotaxa_export.tsv",
-  daynight = TRUE,
-  debug = FALSE
+  daynight = TRUE,   # Add day/night classification
+  debug = FALSE      # Set to TRUE for detailed parsing info
 )
 
-# View processed data structure
+# View the processed data structure
 str(eco_data)
 ```
 
-### Processing MOCNESS PRO Files
+### Working with MOCNESS Files
 
 ```r
-# Process all PRO files in a directory with day/night annotation
-pro_data <- ecotaxaLoadR::load_pro_files("path/to/pro/files/", daynight = TRUE)
+# Load PRO files from a directory
+pro_data <- ecotaxaLoadR::load_pro_files(
+  file_path = "path/to/pro/files/",
+  daynight = TRUE
+)
 
-# Process a single PRO file with day/night annotation
-single_pro <- ecotaxaLoadR::ingest_pro_file("MOC1_01A.PRO", daynight = TRUE)
-
-# Works with different filename formats:
-# - Traditional: MOC8_08A.PRO, moc5_05A.PRO  
-# - Compact: M35_01A.PRO, m12_03B.PRO
-
-# Check processing summary
-attr(pro_data, "processing_summary")
+# Load PID files
+pid_data <- ecotaxaLoadR::load_pid_files(
+  file_path = "path/to/pid/files/"
+)
 ```
 
-### Analyzing PID Files
+### Manual Object ID Parsing
 
 ```r
-# Batch process PID files
-pid_results <- ecotaxaLoadR::load_pid_files("path/to/pid/files/")
-
-# Access different data components
-metadata <- pid_results$metadata
-image_records <- pid_results$records
-attributes <- pid_results$attributes
-
-# View processing summary
-cat("Processed", pid_results$file_count, "files\n")
-
-# Check for automatically parsed sample information
-parsed_fields <- metadata[metadata$section_name == "parsed_sample", ]
-print(parsed_fields)
+# Parse object_id strings directly
+parsed_data <- ecotaxaLoadR::parse_cruise_id(
+  ecotaxa_file = your_data,
+  debug = TRUE  # Shows pattern matching details
+)
 ```
 
-### Day/Night Classification
+## Pattern Management
+
+### Viewing Available Patterns
 
 ```r
-# Add day/night classification to existing data
-annotated_data <- ecotaxaLoadR::annotate_daytime(your_dataframe)
+# Load pattern definitions
+library(ecotaxaLoadR)
 
-# The function adds an 'is_day' column based on:
-# - Geographic coordinates (object_lat, object_lon)
-# - Date and time (object_date, object_time)
-# - Solar position calculations
+# View all patterns
+data("pattern_definitions")
+print(ecotaxaLoadR::pattern_definitions)
+
+# View patterns by instrument type
+moc_patterns <- ecotaxaLoadR::pattern_definitions[
+  ecotaxaLoadR::pattern_definitions$type == "moc", 
+]
+
+# Check which patterns detect lab splits
+lab_split_patterns <- ecotaxaLoadR::pattern_definitions[
+  ecotaxaLoadR::pattern_definitions$lab_split == TRUE, 
+]
 ```
 
-## Data Formats Supported
+### Adding New Patterns
 
-### EcoTaxa TSV Files
-- Standard EcoTaxa export format
-- Automatic detection of MOCNESS data patterns
-- Validation of required fields (`object_id`, coordinates, timestamps)
+To add new parsing patterns:
 
-### MOCNESS PRO Files
-- Header metadata extraction (tow info, instruments, calibrations)
-- **Enhanced tow line parsing** supporting multiple formats:
-  - `% Tow: 13 Sally Ride SR2408` (vessel with spaces)
-  - `% Tow: 1 AE AE2214` (compact vessel format)
-  - `% Tow: 5 R/V Atlantis AT2023` (vessel with special characters)
-- **Flexible MOC number extraction** from filenames:
-  - Traditional: `MOC8_08A.PRO` → MOC 8
-  - Compact: `M35_01A.PRO` → MOC 35
-- Tabular data with time, position, depth, and environmental variables
-- Automatic timezone detection and conversion
+1. **Edit the source file**: `inst/extdata/pattern_definitions.csv`
+2. **Add pattern details**: type, iteration, regex, examples, datasets
+3. **Rebuild package data**: Run `usethis::use_data(pattern_definitions, overwrite = TRUE)`
+4. **Update documentation**: Run `devtools::document()`
+5. **Test patterns**: Use debug mode in `parse_cruise_id()`
 
-### PID Files (Particle Image Data)
-- Section-based metadata parsing
-- **Automatic SampleId parsing** extracts:
-  - Cruise identifier (e.g., "sr2407", "ab1234")
-  - MOC number (e.g., "6", "13") 
-  - Net number (e.g., "3", "8")
-- **Date standardization** converts formats like "20240504-2248" to "2024-05-04"
-- Image measurement attributes
-- Support for multiple scanning configurations
+### Testing Pattern Recognition
 
-## Key Functions
-
-| Function | Purpose | New Features |
-|----------|---------|--------------|
-| `ecotaxaLoadR::load_eco_taxa()` | Load and process EcoTaxa TSV files | |
-| `ecotaxaLoadR::load_pro_files()` | Batch process MOCNESS PRO files | **Added `daynight` parameter** |
-| `ecotaxaLoadR::ingest_pro_file()` | Process individual PRO files | **Enhanced filename parsing, daynight support** |
-| `ecotaxaLoadR::load_pid_files()` | Batch process PID files | **Automatic SampleId parsing** |
-| `ecotaxaLoadR::annotate_daytime()` | Add day/night classification | |
-
-## Data Validation
-
-The package includes comprehensive data validation:
-
-- **Temporal consistency**: Ensures single date per cruise-MOC deployment
-- **Spatial consistency**: Validates coordinate consistency within deployments
-- **Data completeness**: Checks for required fields and valid ranges
-- **Unit conversions**: Automatic conversion based on image resolution settings
-- **Pattern validation**: Validates SampleId patterns and date formats in PID files
+```r
+# Test pattern matching with debug mode
+result <- ecotaxaLoadR::parse_cruise_id(
+  ecotaxa_file = your_data,
+  debug = TRUE  # Shows detailed pattern matching information
+)
+```
 
 ## Example Workflows
 
-### Complete MOCNESS Analysis Pipeline
+### Standard EcoTaxa Processing
 
 ```r
-# 1. Load EcoTaxa data with day/night annotation
-eco_data <- ecotaxaLoadR::load_eco_taxa("ecotaxa_export.tsv", daynight = TRUE)
+library(ecotaxaLoadR)
 
-# 2. Process corresponding PRO files with day/night annotation
-pro_data <- ecotaxaLoadR::load_pro_files("pro_files/", daynight = TRUE)
+# Load and process EcoTaxa data
+data <- ecotaxaLoadR::load_eco_taxa(
+  file_path = "ecotaxa_export.tsv",
+  daynight = TRUE
+)
 
-# 3. Process PID files with automatic sample parsing
-pid_data <- ecotaxaLoadR::load_pid_files("pid_files/")
-
-# 4. Access parsed sample information
-sample_info <- pid_data$metadata %>%
-  dplyr::filter(section_name == "parsed_sample") %>%
-  dplyr::select(scan_id, key, value) %>%
-  tidyr::pivot_wider(names_from = key, values_from = value)
-
-# 5. Combine datasets for integrated analysis
-# (your analysis code here)
+# Check parsing results
+table(data$pattern)  # Which patterns were used
+summary(data$lab_split)  # Lab split information
 ```
 
-### PID File Analysis with Sample Information
+### MOCNESS Data Integration
 
 ```r
-# Process PID files and extract sample metadata
-pid_results <- ecotaxaLoadR::load_pid_files("pid_files/")
+# Load MOCNESS profile data
+pro_data <- ecotaxaLoadR::load_pro_files("mocness_pro/")
 
-# View automatically parsed sample fields
-sample_metadata <- pid_results$metadata %>%
-  dplyr::filter(section_name == "parsed_sample") %>%
-  dplyr::select(scan_id, key, value)
+# Load deployment metadata  
+pid_data <- ecotaxaLoadR::load_pid_files("mocness_pid/")
 
-# Check for different cruises and deployments
-cruise_summary <- sample_metadata %>%
-  dplyr::filter(key == "cruise") %>%
-  dplyr::count(value, name = "n_scans")
+# Load EcoTaxa data
+eco_data <- ecotaxaLoadR::load_eco_taxa("ecotaxa_export.tsv")
 
-print(cruise_summary)
-```
-
-### Quality Control Workflow
-
-```r
-# Load data with validation
-eco_data <- ecotaxaLoadR::load_eco_taxa("data.tsv")
-
-# Check for any validation issues
-# (validation results are reported automatically)
-
-# Filter and clean data as needed
-clean_data <- eco_data %>%
-  dplyr::filter(!is.na(object_area_mm2)) %>%
-  dplyr::filter(object_depth_max > object_depth_min)
+# Combine datasets for analysis
+combined_data <- merge(eco_data, pro_data, by = c("cruise", "moc"))
 ```
 
 ## Recent Updates
 
-### Version 0.0.0.9000
+### Version 0.0.0.9000 (Current Branch)
+- **🔄 Major Refactoring**: Centralized pattern definitions system
+- **📊 Pattern Definitions Dataset**: All regex patterns now stored in `pattern_definitions` 
+- **🏗️ Code Architecture**: Refactored `parse_cruise_id()` for maintainability
+- **✅ Enhanced Validation**: Improved debugging and error handling
+- **📝 Documentation**: Comprehensive pattern documentation and examples
+- **🔧 Maintainability**: Single source of truth for all parsing patterns
+
+### Previous Updates
 - **Enhanced PRO file processing**: Added `daynight` parameter to `ecotaxaLoadR::load_pro_files()` 
 - **Improved filename parsing**: Support for "M" prefix PRO files (e.g., `M35_01A.PRO`)
 - **Flexible tow line formats**: Handle various vessel name and cruise ID formats
@@ -235,15 +221,34 @@ clean_data <- eco_data %>%
 - **Date standardization**: Convert various date formats to ISO standard in PID files
 - **Enhanced error handling**: Graceful handling of parsing failures and edge cases
 
+## Data Output Structure
+
+The processed data includes standardized columns:
+
+- **Identification**: `cruise`, `moc`, `net`, `depth`, `lab_split`
+- **Spatial**: `object_lat`, `object_lon` 
+- **Temporal**: `object_date`, `object_time`, `daynight`
+- **Technical**: `pattern` (which parsing pattern was used)
+- **Taxonomic**: EcoTaxa classification hierarchy
+- **Morphometric**: Object measurements and features
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests on GitHub.
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Citation
 
-If you use `ecotaxaLoadR` in your research, please cite:
+If you use this package in your research, please cite:
 
 ```
-Earl, S. (2025). ecotaxaLoadR: Minimally process and format EcoTaxa resources. 
-R package version 0.0.0.9000. https://github.com/srearl/ecotaxaLoadR
+Rearl, S. (2024). ecotaxaLoadR: Minimally process and format EcoTaxa resources 
+for marine ecological analyses. R package version 0.0.0.9000.
 ```
+
+## Acknowledgments
+
+This package was developed to support marine ecological research and is part of ongoing efforts to standardize and streamline the processing of marine imaging data.

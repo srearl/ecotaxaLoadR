@@ -170,12 +170,12 @@ parse_cruise_id <- function(
       match_result <- regmatches(id, regexec(moc8, id))
       if (length(match_result[[1]]) > 1) {
         message(sprintf(
-          "✓ %s -> %s",
+          "[MATCH] %s -> %s",
           id,
           paste(match_result[[1]][-1], collapse = " | ")
         ))
       } else {
-        message(sprintf("✗ %s -> NO MATCH", id))
+        message(sprintf("[NO MATCH] %s -> NO MATCH", id))
       }
     }
     message("moc_pattern_true: ", moc_pattern_true)
