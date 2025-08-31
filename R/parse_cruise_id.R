@@ -35,13 +35,13 @@ parse_cruise_id <- function(
 
   # get patterns from the definitions table
   moc_patterns <- ecotaxaLoadR::pattern_definitions[
-    pattern_definitions$type == "moc",
+    ecotaxaLoadR::pattern_definitions$type == "moc",
   ]
   flowcam_patterns <- ecotaxaLoadR::pattern_definitions[
-    pattern_definitions$type == "flowcam",
+    ecotaxaLoadR::pattern_definitions$type == "flowcam",
   ]
   uvp_patterns <- ecotaxaLoadR::pattern_definitions[
-    pattern_definitions$type == "uvp",
+    ecotaxaLoadR::pattern_definitions$type == "uvp",
   ]
 
   # create individual pattern variables using type + iteration naming
